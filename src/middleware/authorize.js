@@ -1,6 +1,5 @@
 import { AuthService } from "../service/auth.service.js";
 import { Config } from "./../config/config.js";
-import { ErrorClass } from "./../utils/errorClass/index.js";
 
 const authService = new AuthService();
 
