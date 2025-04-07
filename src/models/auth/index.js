@@ -12,6 +12,11 @@ export const User = db.define("User", {
     allowNull: false,
     unique: true,
   },
+  billerId: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+  },
   firstName: {
     type: DataTypes.STRING,
     allowNull: false,
