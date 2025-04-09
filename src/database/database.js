@@ -13,6 +13,8 @@ const db = new Sequelize(
     host: Config.database.host,
     dialect: Config.database.dialect,
     logging: process.env.NODE_ENV === "development" ? console.log : false,
+    dialectOptions: Config.database.dialectOptions,
+    pool: Config.database.pool,
   }
 );
 

@@ -3,7 +3,7 @@ import { DataTypes } from "sequelize";
 
 export const User = db.define("User", {
   id: {
-    type: DataTypes.STRING,
+    type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
   },
