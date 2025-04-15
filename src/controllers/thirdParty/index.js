@@ -19,5 +19,12 @@ export const ThirdPartyendpoint = TryCatchFunction(async (req, res) => {
     }
   );
   const result = await response.data;
-  return res.status(200).json(result);
+  console.log(result);
+  if (response.success === false) {
+    return res.status(400).json(response.error);
+  }
+  if (response.status === error) {
+    return res.status(400).json(response.error);
+  }
+  return res.status(result.status).json(result.data);
 });
