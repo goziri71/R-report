@@ -21,7 +21,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   }
 
   const data = await loginFromAlpha({ email_address, password });
-  console.log(data);
+
   if (!data) throw new ErrorClass("Service temporarily down", 500);
 
   let existingUser = await User.findOne({

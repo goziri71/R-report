@@ -8,13 +8,26 @@ const axiosPublic = axios.create({
 });
 
 export const loginFromAlpha = async (payload) => {
-  const response = await axiosPublic.post(
-    "/api/v1/auth/login-password",
-    payload,
-    {
-      withCredentials: true,
+  try {
+    const response = await axiosPublic.post(
+      "/api/v1/auth/login-password",
+      payload
+    );
+    if (response.data.success === false) {
+      return {
+        success: false,
+        status: 401,
+        message: response.data.error,
+      };
     }
-  );
-  const result = await response.data;
-  return result;
+    const result = response.data;
+    return result;
+  } catch (err) {
+    console.log(err);
+    return {
+      status: false,
+      message: err.message || "Authentication failed",
+      error: err.response?.data || err,
+    };
+  }
 };
