@@ -36,8 +36,8 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       existingUser.dob !== data.data.dob ||
       existingUser.nationality !== data.data.nationality ||
       existingUser.occupation !== data.data.occupation ||
-      existingUser.gender !== data.data.gender;
-    // existingUser.billerId !== data.data.billerId;
+      existingUser.gender !== data.data.gender ||
+      existingUser.billerId !== data.data.billerId;
 
     if (!needsUpdate) {
       const token = await authService.signToken(
@@ -50,7 +50,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
         code: 200,
         message: "Login successful",
         data: {
-          user: existingUser,
+          // user: existingUser,
           authToken: token,
         },
       });
@@ -65,7 +65,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
         nationality: data.data.nationality,
         occupation: data.data.occupation,
         gender: data.data.gender,
-        // billerId: data.data.billerId,
+        billerId: data.data.billerId,
       },
       {
         where: { id: existingUser.id },
