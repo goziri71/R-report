@@ -80,3 +80,25 @@ export const userStatus = TryCatchFunction(async (req, res) => {
         : "user has been deactivated",
   });
 });
+
+export const updateUserRole = TryCatchFunction(async (req, res) => {
+  const { userId } = req.params;
+  const { type } = req.body;
+  if (!userId) {
+    throw new ErrorClass("Userid is required", 400);
+  }
+  if (!type || !["user", "admin"].includes(type)) {
+    throw new ErrorClass("Valid user role is required", 400);
+  }
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new ErrorClass("User not found", 404);
+  }
+  user.type = type;
+  await User.update({ type: "admin" }, { where: { id: userId } });
+  return res.status(200).json({
+    status: true,
+    code: 200,
+    message: `User role updated to ${type} successfully`,
+  });
+});

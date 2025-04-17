@@ -4,6 +4,7 @@ import {
   deleteUser,
   userStatus,
   getSingleUserDetails,
+  updateUserRole,
 } from "../../../controllers/users/index.js";
 import { authorize } from "../../../middleware/authorize.js";
 
@@ -17,5 +18,6 @@ router.patch(
   userStatus
 );
 router.get("/single-user/details/:id", authorize, getSingleUserDetails);
+router.patch("/user-role/:userId", authorize, updateUserRole);
 
 export default router;

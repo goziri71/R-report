@@ -13,6 +13,7 @@ export const loginFromAlpha = async (payload) => {
       "/api/v1/auth/login-password",
       payload
     );
+
     if (response.data.success === false) {
       return {
         success: false,
@@ -21,6 +22,16 @@ export const loginFromAlpha = async (payload) => {
       };
     }
     const result = response.data;
+    if (result.data.success === false) {
+      return res.status(401).json({
+        error: response.error,
+        message: "invalid password or wrong password",
+      });
+    }
+    if (response.data.error === "Password cannot be empty") {
+      return res.status(422).json(response.error);
+    }
+
     return result;
   } catch (err) {
     console.log(err);

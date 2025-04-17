@@ -12,18 +12,18 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   const missingFields = [];
   if (!email_address) missingFields.push("email");
   if (!password) missingFields.push("password");
-
   if (missingFields.length > 0) {
     throw new ErrorClass(
       `Missing required fields: ${missingFields.join(", ")}`,
-      400
+      422
     );
   }
-
   const data = await loginFromAlpha({ email_address, password });
 
+  if (data.status === false) {
+    throw new ErrorClass("invalid password", 401);
+  }
   if (!data) throw new ErrorClass("Service temporarily down", 500);
-
   let existingUser = await User.findOne({
     where: { email: data.data.email },
   });
@@ -38,13 +38,13 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       existingUser.occupation !== data.data.occupation ||
       existingUser.gender !== data.data.gender ||
       existingUser.billerId !== data.data.billerId;
-
     if (!needsUpdate) {
       const token = await authService.signToken(
         existingUser.id,
         Config.JWT_SECRET,
         "1d"
       );
+
       return res.status(200).json({
         status: true,
         code: 200,
@@ -72,7 +72,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       }
     );
     existingUser = await User.findOne({
-      where: { email: data.data.email },
+      where: { email: data?.data.email },
     });
 
     const token = await authService.signToken(
