@@ -29,7 +29,7 @@ const upload = multer({
 export const uploadMiddleware = upload.single("photo");
 
 export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
-  const { message } = req.body;
+  const { message, subject } = req.body;
   const userId = req.user;
   console.log(userId);
   const file = req.file;
@@ -39,7 +39,13 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
   if (!message) {
     throw new ErrorClass("Empty message field", 400);
   }
+  if (!subject) {
+    throw new ErrorClass("Subject is required", 400);
+  }
+
   const sanitizedMessage = sanitizeInput(message);
+  const sanitizedSubject = sanitizeInput(subject);
+
   const user = await User.findByPk(userId);
   if (!user) {
     throw new ErrorClass("user not found", 404);
@@ -61,6 +67,7 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
 
   const newIncident = await Incident.create({
     userId: userId,
+    subject: sanitizedSubject,
     incidentphoto: incidentPhotoUrl,
     incidentMessage: sanitizedMessage,
   });
@@ -73,6 +80,7 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
       incident: {
         id: newIncident.id,
         userId: newIncident.userId,
+        subject: newIncident.subject,
         incidentphoto: newIncident.incidentphoto,
         incidentMessage: newIncident.incidentMessage,
       },

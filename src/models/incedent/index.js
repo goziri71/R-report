@@ -12,6 +12,10 @@ export const Incident = db.define("Incident", {
     type: DataTypes.INTEGER,
     allowNull: false,
   },
+  subject: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
   incidentphoto: {
     type: DataTypes.STRING,
     allowNull: true,
