@@ -50,6 +50,7 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
   if (!user) {
     throw new ErrorClass("user not found", 404);
   }
+
   let incidentPhotoUrl = null;
   if (file) {
     const fileName = `incidents/${userId}/${Date.now()}-${file.originalname}`;
@@ -83,6 +84,7 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
         subject: newIncident.subject,
         incidentphoto: newIncident.incidentphoto,
         incidentMessage: newIncident.incidentMessage,
+        createdAt: newIncident.createdAt,
       },
     },
   });
