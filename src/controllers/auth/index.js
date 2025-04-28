@@ -23,6 +23,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   if (data.status === false) {
     throw new ErrorClass("invalid password", 401);
   }
+
   if (!data) throw new ErrorClass("Service temporarily down", 500);
   let existingUser = await User.findOne({
     where: { email: data.data.email },
