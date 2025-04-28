@@ -18,7 +18,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: ["http://localhost:5174", "https://redbiller-work-neon.vercel.app"],
+    origin: [
+      "http://localhost:5174",
+      "http://localhost:5173",
+      "https://redbiller-work-neon.vercel.app",
+    ],
     credentials: true,
   })
 );
