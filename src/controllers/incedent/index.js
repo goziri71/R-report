@@ -6,6 +6,7 @@ import { Incident } from "../../models/incedent/index.js";
 import { User } from "../../models/auth/index.js";
 import storageClient from "../../supabase/index.js";
 import multer from "multer";
+import sharp from "sharp";
 import { sanitizeInput } from "../../utils/sanitizedmessage/sanitizeMessage.js";
 
 const storageUrl = process.env.STORAGEURL;
@@ -54,10 +55,19 @@ export const sendAndUpdateReport = TryCatchFunction(async (req, res) => {
   let incidentPhotoUrl = null;
   if (file) {
     const fileName = `incidents/${userId}/${Date.now()}-${file.originalname}`;
+    const compressedImageBuffer = await sharp(file.buffer)
+      .resize({
+        width: 1200,
+        height: 1200,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 80 })
+      .toBuffer();
     const { data, error } = await storageClient
       .from("redreport")
-      .upload(fileName, file.buffer, {
-        contentType: file.mimetype,
+      .upload(fileName, compressedImageBuffer, {
+        contentType: "image/jpeg",
         upsert: false,
       });
     if (error) {
