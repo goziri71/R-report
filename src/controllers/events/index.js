@@ -8,14 +8,12 @@ const formatEventDate = (event) => {
 
   const formatted = { ...event.get({ plain: true }) };
   const dateStr = formatted.eventDate.toString();
-
   if (dateStr.length === 8) {
-    const month = dateStr.substring(0, 2);
-    const day = dateStr.substring(2, 4);
-    const year = dateStr.substring(4, 8);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    const year = dateStr.substring(0, 4);
 
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
+    const date = new Date(month - 1, day, year);
     if (isNaN(date.getTime())) {
       formatted.formattedDate = "Invalid Date";
     } else {
@@ -44,25 +42,6 @@ export const sendEvent = TryCatchFunction(async (req, res) => {
   if (isNaN(dateValue) || eventDate.length !== 8) {
     throw new ErrorClass(
       "Event Date must be in MMDDYYYY format (e.g., '05152025' for May 15, 2025)",
-      400
-    );
-  }
-
-  const month = parseInt(eventDate.substring(0, 2), 10);
-  const day = parseInt(eventDate.substring(2, 4), 10);
-  const year = parseInt(eventDate.substring(4, 8), 10);
-
-  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 2000) {
-    throw new ErrorClass(
-      "Invalid date components. Month must be 01-12, day must be 01-31, and year must be 2000 or later.",
-      400
-    );
-  }
-
-  const daysInMonth = new Date(year, month, 0).getDate();
-  if (day > daysInMonth) {
-    throw new ErrorClass(
-      `Invalid day. ${month}/${year} only has ${daysInMonth} days.`,
       400
     );
   }
@@ -104,6 +83,7 @@ export const sendEvent = TryCatchFunction(async (req, res) => {
 });
 
 export const getAllevent = TryCatchFunction(async (req, res) => {
+  console.log(req);
   const { page = 1, limit = 10, sort = "desc" } = req.query;
   const offset = (page - 1) * limit;
 
