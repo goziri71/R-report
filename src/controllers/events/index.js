@@ -16,12 +16,6 @@ const formatEventDate = (event) => {
     const date = new Date(month - 1, day, year);
     if (isNaN(date.getTime())) {
       formatted.formattedDate = "Invalid Date";
-    } else {
-      formatted.formattedDate = date.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
     }
   }
   return formatted;
