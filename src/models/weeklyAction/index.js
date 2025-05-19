@@ -12,6 +12,10 @@ export const WeeklyReport = db.define("WeeklyReport", {
     type: DataTypes.INTEGER,
     allowNull: false,
   },
+  department: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   submittedAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

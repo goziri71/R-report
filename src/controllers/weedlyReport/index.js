@@ -37,6 +37,8 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("User not found", 404);
   }
 
+  const department = userExists.occupation;
+
   if (
     actionItems.length === 0 &&
     ongoingTasks.length === 0 &&
@@ -47,6 +49,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
 
   const report = await WeeklyReport.create({
     userId,
+    department,
     submittedAt: new Date(),
   });
 
@@ -55,6 +58,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       return ActionItem.create({
         userId: userId,
         reportId: report.id,
+        department,
         description: typeof item === "string" ? item : JSON.stringify(item),
       });
     });
@@ -66,6 +70,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       return OngoingTask.create({
         userId: userId,
         reportId: report.id,
+        department,
         description: typeof task === "string" ? task : JSON.stringify(task),
       });
     });
@@ -77,6 +82,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       return CompletedTask.create({
         userId: userId,
         reportId: report.id,
+        department,
         description: typeof task === "string" ? task : JSON.stringify(task),
       });
     });
@@ -90,6 +96,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     report: {
       id: report.id,
       userId: report.userId,
+      department: report.department,
       submittedAt: report.submittedAt,
     },
   });
