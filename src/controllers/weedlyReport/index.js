@@ -101,3 +101,39 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     },
   });
 });
+
+export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
+  const userId = req.user;
+  const currentUser = await User.findByPk(userId);
+  if (!currentUser) {
+    throw new ErrorClass("user not found", 404);
+  }
+  console.log(currentUser.role);
+  if (currentUser.role !== "admin") {
+    throw new ErrorClass(
+      "Unauthorized: Only admins can access department reports",
+      403
+    );
+  }
+  const adminDepartment = currentUser.occupation;
+  console.log(adminDepartment);
+  const departmentReports = await WeeklyReport.findAll({
+    include: [
+      {
+        model: User,
+        where: { occupation: adminDepartment },
+        attributes: ["id", "firstName", "lastName", "occupation"],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+  });
+
+  console.log(departmentReports);
+
+  return res.status(200).json({
+    code: 200,
+    status: "successful",
+    message: "Weekly Report retrived successfully",
+    data: departmentReports,
+  });
+});

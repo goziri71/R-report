@@ -16,9 +16,20 @@ const setupAssociations = () => {
   events.belongsTo(User, { foreignKey: "userId" });
 
   User.hasMany(WeeklyReport, { foreignKey: "userId" });
+  WeeklyReport.belongsTo(User, { foreignKey: "userId" });
 
   WeeklyReport.hasMany(ActionItem, {
-    foreignKey: "reportId",
+    foreignKey: "userId",
+    onDelete: "CASCADE",
+  });
+
+  WeeklyReport.hasMany(OngoingTask, {
+    foreignKey: "userId",
+    onDelete: "CASCADE",
+  });
+
+  WeeklyReport.hasMany(CompletedTask, {
+    foreignKey: "userId",
     onDelete: "CASCADE",
   });
 
