@@ -7,7 +7,6 @@ import {
   OngoingTask,
   CompletedTask,
 } from "../../models/weeklyAction/index.js";
-import { Op } from "sequelize";
 
 export const createWeeklyReport = TryCatchFunction(async (req, res) => {
   if (
@@ -32,7 +31,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     ? completedTasks
     : [completedTasks];
 
-  const userId = req.user?.id || req.user;
+  const userId = req.user;
   console.log(userId);
   if (!userId) {
     throw new ErrorClass("User authentication required", 401);
@@ -107,53 +106,8 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
   });
 });
 
-// export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
-//   const userId = req.user;
-//   const currentUser = await User.findByPk(userId);
-//   if (!currentUser) {
-//     throw new ErrorClass("user not found", 404);
-//   }
-//   if (currentUser.role !== "admin") {
-//     throw new ErrorClass(
-//       "Unauthorized: Only admins can access department reports",
-//       403
-//     );
-//   }
-//   const adminDepartment = currentUser.occupation;
-
-//   const usersInDepartment = await User.findAll({
-//     where: {
-//       occupation: adminDepartment,
-//       id: { [Op.ne]: userId },
-//     },
-//     attributes: ["id", "firstName", "lastName", "occupation"],
-//   });
-//   console.log("Users in same department:", usersInDepartment);
-
-//   const departmentReports = await WeeklyReport.findAll({
-//     include: [
-//       {
-//         model: User,
-//         where: { occupation: adminDepartment, id: { [Op.ne]: userId } },
-//         attributes: ["id", "firstName", "lastName", "occupation"],
-//       },
-//     ],
-//     order: [["createdAt", "DESC"]],
-//     raw: true,
-//     nest: true,
-//   });
-
-//   return res.status(200).json({
-//     code: 200,
-//     status: "successful",
-//     message: "Weekly Report retrived successfully",
-//     data: departmentReports,
-//   });
-// });
-
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
-  console.log("get all ", userId);
   const currentUser = await User.findByPk(userId);
   if (!currentUser) {
     throw new ErrorClass("user not found", 404);
@@ -184,9 +138,8 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
           model: User,
           where: {
             occupation: adminDepartment,
-            id: { [Op.ne]: userId },
           },
-          attributes: ["id", "firstName", "lastName", "occupation"],
+          attributes: ["id", "firstName", "lastName", "occupation", "role"],
         },
       ],
       order: [["createdAt", "DESC"]],
