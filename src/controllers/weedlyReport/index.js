@@ -32,7 +32,11 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     ? completedTasks
     : [completedTasks];
 
-  const userId = req.user;
+  const userId = req.user?.id || req.user;
+  console.log(userId);
+  if (!userId) {
+    throw new ErrorClass("User authentication required", 401);
+  }
   const userExists = await User.findByPk(userId);
   if (!userExists) {
     throw new ErrorClass("User not found", 404);
@@ -50,7 +54,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
 
   const report = await WeeklyReport.create({
     userId,
-    department: currentUser.occupation,
+    department: userExists.occupation,
     submittedAt: new Date(),
   });
 
@@ -59,7 +63,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       return ActionItem.create({
         userId: userId,
         reportId: report.id,
-        department,
+        department: userExists.occupation,
         description: typeof item === "string" ? item : JSON.stringify(item),
       });
     });
@@ -71,7 +75,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       return OngoingTask.create({
         userId: userId,
         reportId: report.id,
-        department,
+        department: userExists.occupation,
         description: typeof task === "string" ? task : JSON.stringify(task),
       });
     });
@@ -149,6 +153,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
 
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
+  console.log("get all ", userId);
   const currentUser = await User.findByPk(userId);
   if (!currentUser) {
     throw new ErrorClass("user not found", 404);
@@ -161,12 +166,10 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   }
   const adminDepartment = currentUser.occupation;
 
-  // Extract pagination parameters from query
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
 
-  // Validate pagination parameters
   if (page < 1) {
     throw new ErrorClass("Page number must be greater than 0", 400);
   }
@@ -174,7 +177,6 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("Limit must be between 1 and 100", 400);
   }
 
-  // OPTIMIZATION 1: Use findAndCountAll instead of separate queries
   const { count: totalReports, rows: departmentReports } =
     await WeeklyReport.findAndCountAll({
       include: [
@@ -190,11 +192,8 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
       order: [["createdAt", "DESC"]],
       limit: limit,
       offset: offset,
-      // OPTIMIZATION 2: Remove raw and nest for better performance
-      distinct: true, // Important for accurate count with joins
+      distinct: true,
     });
-
-  // Calculate pagination info
   const totalPages = Math.ceil(totalReports / limit);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
