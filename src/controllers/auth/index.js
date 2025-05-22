@@ -133,14 +133,18 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       422
     );
   }
+  const data = await loginFromAlpha({ email_address, password });
 
-  // Check if user exists in local database first
+  if (data.status === false) {
+    throw new ErrorClass("invalid password", 401);
+  }
+
+  if (!data) throw new ErrorClass("Service temporarily down", 500);
   let existingUser = await User.findOne({
-    where: { email: email_address },
+    where: { email: data.data.email },
   });
 
   if (existingUser) {
-    // User exists locally, generate token and return
     const token = await authService.signToken(
       existingUser.id,
       Config.JWT_SECRET,
@@ -152,21 +156,12 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       code: 200,
       message: "Login successful",
       data: {
+        // user: existingUser,
         authToken: token,
       },
     });
   }
 
-  // First time login - fetch from third party API
-  const data = await loginFromAlpha({ email_address, password });
-
-  if (data.status === false) {
-    throw new ErrorClass("invalid password", 401);
-  }
-
-  if (!data) throw new ErrorClass("Service temporarily down", 500);
-
-  // Create new user from third party data
   const user = await User.create({
     firstName: data.data.firstName,
     lastName: data.data.lastName,
@@ -185,7 +180,6 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       500
     );
   }
-
   const token = await authService.signToken(user.id, Config.JWT_SECRET, "1d");
   return res.status(201).json({
     status: true,
