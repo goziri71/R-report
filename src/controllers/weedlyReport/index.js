@@ -108,18 +108,11 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
 
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
+
   const currentUser = await User.findByPk(userId);
-  console.log(currentUser);
   if (!currentUser) {
-    throw new ErrorClass("user not found", 404);
+    throw new ErrorClass("User not found", 404);
   }
-  if (currentUser.role !== "admin") {
-    throw new ErrorClass(
-      "Unauthorized: Only admins can access department reports",
-      403
-    );
-  }
-  const adminDepartment = currentUser.occupation;
 
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -132,57 +125,82 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("Limit must be between 1 and 100", 400);
   }
 
-  const { count: totalReports, rows: departmentReports } =
-    await WeeklyReport.findAndCountAll({
-      where: {
-        department: adminDepartment,
+  const queryOptions = {
+    where: {},
+    include: [
+      {
+        model: User,
+        attributes: ["id", "firstName", "lastName", "occupation", "role"],
       },
-      include: [
-        {
-          model: User,
-          where: {
-            occupation: adminDepartment,
-          },
-          attributes: ["id", "firstName", "lastName", "occupation", "role"],
-        },
-        {
-          model: ActionItem,
-          required: false,
-          attributes: ["id", "description", "createdAt"],
-        },
-        {
-          model: OngoingTask,
-          required: false,
-          attributes: ["id", "description", "createdAt"],
-        },
-        {
-          model: CompletedTask,
-          required: false,
-          attributes: ["id", "description", "createdAt"],
-        },
-      ],
-      order: [["submittedAt", "DESC"]],
-      limit: limit,
-      offset: offset,
-      distinct: true,
-    });
+      {
+        model: ActionItem,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+      {
+        model: OngoingTask,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+      {
+        model: CompletedTask,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+    ],
+    order: [["submittedAt", "DESC"]],
+    limit,
+    offset,
+    distinct: true,
+  };
+
+  if (currentUser.role === "admin") {
+    queryOptions.where.department = currentUser.occupation;
+    queryOptions.include[0].where = { occupation: currentUser.occupation };
+  } else if (currentUser.role === "user") {
+    queryOptions.where.userId = userId;
+  } else {
+    throw new ErrorClass("Unauthorized role", 403);
+  }
+
+  const { count: totalReports, rows: reports } =
+    await WeeklyReport.findAndCountAll(queryOptions);
 
   const totalPages = Math.ceil(totalReports / limit);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
 
+  let responseData;
+  if (currentUser.role === "user") {
+    responseData = {
+      user: {
+        id: currentUser.id,
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        occupation: currentUser.occupation,
+        role: currentUser.role,
+      },
+      reports: reports.map((report) => {
+        const { User, ...rest } = report.toJSON();
+        return rest;
+      }),
+    };
+  } else {
+    responseData = reports;
+  }
+
   return res.status(200).json({
     code: 200,
     status: "successful",
-    message: "Weekly Report retrieved successfully",
-    data: departmentReports,
+    message: "Weekly Reports retrieved successfully",
+    data: responseData,
     pagination: {
       currentPage: page,
-      totalPages: totalPages,
-      totalReports: totalReports,
+      totalPages,
+      totalReports,
       reportsPerPage: limit,
-      hasNextPage: hasNextPage,
-      hasPrevPage: hasPrevPage,
+      hasNextPage,
+      hasPrevPage,
       nextPage: hasNextPage ? page + 1 : null,
       prevPage: hasPrevPage ? page - 1 : null,
     },
