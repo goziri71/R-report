@@ -156,7 +156,6 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       code: 200,
       message: "Login successful",
       data: {
-        // user: existingUser,
         authToken: token,
       },
     });

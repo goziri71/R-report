@@ -109,6 +109,7 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
   const currentUser = await User.findByPk(userId);
+  console.log(currentUser);
   if (!currentUser) {
     throw new ErrorClass("user not found", 404);
   }
@@ -133,6 +134,9 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
 
   const { count: totalReports, rows: departmentReports } =
     await WeeklyReport.findAndCountAll({
+      where: {
+        department: adminDepartment,
+      },
       include: [
         {
           model: User,
@@ -141,12 +145,28 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
           },
           attributes: ["id", "firstName", "lastName", "occupation", "role"],
         },
+        {
+          model: ActionItem,
+          required: false,
+          attributes: ["id", "description", "createdAt"],
+        },
+        {
+          model: OngoingTask,
+          required: false,
+          attributes: ["id", "description", "createdAt"],
+        },
+        {
+          model: CompletedTask,
+          required: false,
+          attributes: ["id", "description", "createdAt"],
+        },
       ],
-      order: [["createdAt", "DESC"]],
+      order: [["submittedAt", "DESC"]],
       limit: limit,
       offset: offset,
       distinct: true,
     });
+
   const totalPages = Math.ceil(totalReports / limit);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
