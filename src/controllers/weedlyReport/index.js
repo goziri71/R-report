@@ -206,3 +206,21 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     },
   });
 });
+
+export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
+  const currentUserId = req.user;
+  const currentUser = await User.findByPk(currentUserId);
+  if (!currentUser) {
+    throw new ErrorClass("user not found", 404);
+  }
+  if (currentUser.role !== "admin") {
+    throw new ErrorClass("unathorized user, admin only", 404);
+  }
+  const { userId } = req.params;
+  const userDetails = await User.findByPk(userId);
+  if (!userDetails) {
+    throw new ErrorClass("target user not found", 404);
+  }
+
+  const { ActionItem, OngoingTask, CompletedTask } = req.body;
+});
