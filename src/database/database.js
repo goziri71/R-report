@@ -2,9 +2,8 @@ import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 import { Config } from "../config/config.js";
 
-dotenv.config(); // Load environment variables
+dotenv.config();
 
-// Create a new Sequelize instance using environment variables
 const db = new Sequelize(
   Config.database.name,
   Config.database.username,
@@ -18,7 +17,6 @@ const db = new Sequelize(
   }
 );
 
-// Test Database Connection
 export async function connectDB() {
   try {
     await db.authenticate();

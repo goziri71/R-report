@@ -21,7 +21,7 @@ export const Config = {
     pool: {
       max: 5,
       min: 0,
-      acquire: 60000, // Increase timeout to 60 seconds
+      acquire: 60000,
       idle: 10000,
     },
   },

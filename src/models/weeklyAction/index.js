@@ -45,7 +45,7 @@ export const ActionItem = db.define(
     },
   },
   {
-    tableName: "ActionItems", // Check if this is the correct name
+    tableName: "ActionItems",
     freezeTableName: true,
   }
 );
@@ -73,7 +73,7 @@ export const OngoingTask = db.define(
     },
   },
   {
-    tableName: "OngoingTasks", // Check if this is the correct name
+    tableName: "OngoingTasks",
     freezeTableName: true,
   }
 );
@@ -101,7 +101,7 @@ export const CompletedTask = db.define(
     },
   },
   {
-    tableName: "CompletedTasks", // Check if this is the correct name
+    tableName: "CompletedTasks",
     freezeTableName: true,
   }
 );
