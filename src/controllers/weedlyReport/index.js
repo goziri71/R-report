@@ -7,6 +7,7 @@ import {
   OngoingTask,
   CompletedTask,
 } from "../../models/weeklyAction/index.js";
+import Sequelize from "../../database/database.js";
 
 export const createWeeklyReport = TryCatchFunction(async (req, res) => {
   if (
@@ -214,13 +215,86 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("user not found", 404);
   }
   if (currentUser.role !== "admin") {
-    throw new ErrorClass("unathorized user, admin only", 404);
+    throw new ErrorClass("unauthorized user, admin only", 403);
   }
-  const { userId } = req.params;
-  const userDetails = await User.findByPk(userId);
-  if (!userDetails) {
+  const { targetUser } = req.params;
+  const targetUserDetails = await User.findByPk(targetUser);
+  console.log(targetUserDetails);
+  if (!targetUserDetails) {
     throw new ErrorClass("target user not found", 404);
   }
 
-  const { ActionItem, OngoingTask, CompletedTask } = req.body;
+  const {
+    ActionItem: actionItems,
+    OngoingTask: ongoingTasks,
+    CompletedTask: completedTasks,
+  } = req.body;
+  console.log(req.body);
+  try {
+    const transaction = await Sequelize.transaction();
+    try {
+      if (actionItems && Array.isArray(actionItems)) {
+        for (const item of actionItems) {
+          if (item.id) {
+            await ActionItem.update(
+              { description: item.description },
+              {
+                where: {
+                  id: item.id,
+                  userId: targetUser,
+                },
+                transaction,
+              }
+            );
+          }
+        }
+      }
+
+      if (ongoingTasks && Array.isArray(ongoingTasks)) {
+        for (const task of ongoingTasks) {
+          if (task.id) {
+            await OngoingTask.update(
+              { description: task.description },
+              {
+                where: {
+                  id: task.id,
+                  userId: targetUser,
+                },
+                transaction,
+              }
+            );
+          }
+        }
+      }
+
+      if (completedTasks && Array.isArray(completedTasks)) {
+        for (const task of completedTasks) {
+          if (task.id) {
+            await CompletedTask.update(
+              { description: task.description },
+              {
+                where: {
+                  id: task.id,
+                  userId: targetUser,
+                },
+                transaction,
+              }
+            );
+          }
+        }
+      }
+      await transaction.commit();
+      res.status(201).json({
+        code: 201,
+        status: true,
+        message: "Weekly report updated successfully",
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error updating weekly report:", error);
+    throw new ErrorClass("Failed to update weekly report", 500);
+  }
 });
