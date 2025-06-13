@@ -3,13 +3,13 @@ import { ErrorClass } from "../utils/errorClass/index.js";
 export const ErrorHandlerMiddleware = (error, req, res, next) => {
   if (error instanceof ErrorClass) {
     return res.status(error.statusCode).json({
-      status: "error",
+      status: false,
       message: error.message,
     });
   }
 
   return res.status(500).json({
-    status: "error",
+    status: false,
     message: error.message,
   });
 };
