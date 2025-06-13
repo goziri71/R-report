@@ -8,6 +8,7 @@ import {
   CompletedTask,
 } from "../../models/weeklyAction/index.js";
 import Sequelize from "../../database/database.js";
+import { Op } from "sequelize";
 
 export const createWeeklyReport = TryCatchFunction(async (req, res) => {
   if (
@@ -107,10 +108,111 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
   });
 });
 
+// export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
+//   const userId = req.user;
+
+//   const currentUser = await User.findByPk(userId);
+//   if (!currentUser) {
+//     throw new ErrorClass("User not found", 404);
+//   }
+
+//   const page = parseInt(req.query.page) || 1;
+//   const limit = parseInt(req.query.limit) || 100;
+//   const offset = (page - 1) * limit;
+
+//   if (page < 1) {
+//     throw new ErrorClass("Page number must be greater than 0", 400);
+//   }
+//   if (limit < 1 || limit > 100) {
+//     throw new ErrorClass("Limit must be between 1 and 100", 400);
+//   }
+
+//   const queryOptions = {
+//     where: {},
+//     include: [
+//       {
+//         model: User,
+//         attributes: ["id", "firstName", "lastName", "occupation", "role"],
+//       },
+//       {
+//         model: ActionItem,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: OngoingTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: CompletedTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//     ],
+//     order: [["submittedAt", "DESC"]],
+//     limit,
+//     offset,
+//     distinct: true,
+//   };
+
+//   if (currentUser.role === "admin") {
+//     queryOptions.where.department = currentUser.occupation;
+//     queryOptions.include[0].where = { occupation: currentUser.occupation };
+//   } else if (currentUser.role === "user") {
+//     queryOptions.where.userId = userId;
+//   } else {
+//     throw new ErrorClass("Unauthorized role", 403);
+//   }
+
+//   const { count: totalReports, rows: reports } =
+//     await WeeklyReport.findAndCountAll(queryOptions);
+
+//   const totalPages = Math.ceil(totalReports / limit);
+//   const hasNextPage = page < totalPages;
+//   const hasPrevPage = page > 1;
+
+//   let responseData;
+//   if (currentUser.role === "user") {
+//     responseData = {
+//       user: {
+//         id: currentUser.id,
+//         firstName: currentUser.firstName,
+//         lastName: currentUser.lastName,
+//         occupation: currentUser.occupation,
+//         role: currentUser.role,
+//       },
+//       reports: reports.map((report) => {
+//         const { User, ...rest } = report.toJSON();
+//         return rest;
+//       }),
+//     };
+//   } else {
+//     responseData = reports;
+//   }
+
+//   return res.status(200).json({
+//     code: 200,
+//     status: "successful",
+//     message: "Weekly Reports retrieved successfully",
+//     data: responseData,
+//     pagination: {
+//       currentPage: page,
+//       totalPages,
+//       totalReports,
+//       reportsPerPage: limit,
+//       hasNextPage,
+//       hasPrevPage,
+//       nextPage: hasNextPage ? page + 1 : null,
+//       prevPage: hasPrevPage ? page - 1 : null,
+//     },
+//   });
+// });
+
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
-
   const currentUser = await User.findByPk(userId);
+
   if (!currentUser) {
     throw new ErrorClass("User not found", 404);
   }
@@ -119,12 +221,9 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
   const offset = (page - 1) * limit;
 
-  if (page < 1) {
-    throw new ErrorClass("Page number must be greater than 0", 400);
-  }
-  if (limit < 1 || limit > 100) {
+  if (page < 1) throw new ErrorClass("Page number must be greater than 0", 400);
+  if (limit < 1 || limit > 100)
     throw new ErrorClass("Limit must be between 1 and 100", 400);
-  }
 
   const queryOptions = {
     where: {},
@@ -132,6 +231,7 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
       {
         model: User,
         attributes: ["id", "firstName", "lastName", "occupation", "role"],
+        where: {},
       },
       {
         model: ActionItem,
@@ -155,9 +255,17 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     distinct: true,
   };
 
-  if (currentUser.role === "admin") {
+  if (currentUser.role === "superadmin") {
+    queryOptions.include[0].where = {
+      role: "admin",
+      id: { [Op.ne]: currentUser.id },
+    };
+  } else if (currentUser.role === "admin") {
     queryOptions.where.department = currentUser.occupation;
-    queryOptions.include[0].where = { occupation: currentUser.occupation };
+    queryOptions.include[0].where = {
+      occupation: currentUser.occupation,
+      role: "user",
+    };
   } else if (currentUser.role === "user") {
     queryOptions.where.userId = userId;
   } else {
@@ -171,24 +279,22 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
 
-  let responseData;
-  if (currentUser.role === "user") {
-    responseData = {
-      user: {
-        id: currentUser.id,
-        firstName: currentUser.firstName,
-        lastName: currentUser.lastName,
-        occupation: currentUser.occupation,
-        role: currentUser.role,
-      },
-      reports: reports.map((report) => {
-        const { User, ...rest } = report.toJSON();
-        return rest;
-      }),
-    };
-  } else {
-    responseData = reports;
-  }
+  const responseData =
+    currentUser.role === "user"
+      ? {
+          user: {
+            id: currentUser.id,
+            firstName: currentUser.firstName,
+            lastName: currentUser.lastName,
+            occupation: currentUser.occupation,
+            role: currentUser.role,
+          },
+          reports: reports.map((report) => {
+            const { User, ...rest } = report.toJSON();
+            return rest;
+          }),
+        }
+      : reports;
 
   return res.status(200).json({
     code: 200,
@@ -208,93 +314,88 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   });
 });
 
+// export const getAllAdminReport = TryCatchFunction(async (req, res) => {
+//   const currentUserId = req.user;
+//   const currentUser = await User.findByPk(currentUserId);
+//   if (!currentUser) {
+//     throw new ErrorClass("user not found", 404);
+//   }
+//   if (currentUser.role !== "superAdmin") {
+//     throw new ErrorClass("unauthorized user, SuperAdmin only", 403);
+//   }
+// });
+
 export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
   const currentUserId = req.user;
-  const currentUser = await User.findByPk(currentUserId);
-  if (!currentUser) {
-    throw new ErrorClass("user not found", 404);
-  }
-  if (currentUser.role !== "admin") {
-    throw new ErrorClass("unauthorized user, admin only", 403);
-  }
   const { targetUser } = req.params;
-  const targetUserDetails = await User.findByPk(targetUser);
-  console.log(targetUserDetails);
-  if (!targetUserDetails) {
-    throw new ErrorClass("target user not found", 404);
-  }
-
   const {
     ActionItem: actionItems,
     OngoingTask: ongoingTasks,
     CompletedTask: completedTasks,
   } = req.body;
-  console.log(req.body);
-  try {
-    const transaction = await Sequelize.transaction();
-    try {
-      if (actionItems && Array.isArray(actionItems)) {
-        for (const item of actionItems) {
-          if (item.id) {
-            await ActionItem.update(
-              { description: item.description },
-              {
-                where: {
-                  id: item.id,
-                  userId: targetUser,
-                },
-                transaction,
-              }
-            );
-          }
-        }
-      }
 
-      if (ongoingTasks && Array.isArray(ongoingTasks)) {
-        for (const task of ongoingTasks) {
-          if (task.id) {
-            await OngoingTask.update(
-              { description: task.description },
-              {
-                where: {
-                  id: task.id,
-                  userId: targetUser,
-                },
-                transaction,
-              }
-            );
-          }
-        }
-      }
-
-      if (completedTasks && Array.isArray(completedTasks)) {
-        for (const task of completedTasks) {
-          if (task.id) {
-            await CompletedTask.update(
-              { description: task.description },
-              {
-                where: {
-                  id: task.id,
-                  userId: targetUser,
-                },
-                transaction,
-              }
-            );
-          }
-        }
-      }
-      await transaction.commit();
-      res.status(201).json({
-        code: 201,
-        status: true,
-        message: "Weekly report updated successfully",
-      });
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
+  const [currentUser, targetUserDetails] = await Promise.all([
+    User.findByPk(currentUserId),
+    User.findByPk(targetUser),
+  ]);
+  if (!currentUser) throw new ErrorClass("User not found", 404);
+  if (currentUser.role !== "admin")
+    throw new ErrorClass("Unauthorized user, admin only", 403);
+  if (!targetUserDetails) throw new ErrorClass("Target user not found", 404);
+  const transaction = await Sequelize.transaction();
+  const prepareBulkUpdate = async (Model, items, modelName) => {
+    if (!items?.length) return null;
+    const ids = items.map((item) => item.id);
+    const count = await Model.count({
+      where: { id: ids, userId: targetUser },
+      transaction,
+    });
+    if (count !== items.length) {
+      throw new ErrorClass(`Some ${modelName} not found for this user`, 404);
     }
-  } catch (error) {
-    console.error("Error updating weekly report:", error);
-    throw new ErrorClass("Failed to update weekly report", 500);
+    return items.map((item) => ({
+      id: item.id,
+      userId: targetUser,
+      description: item.description,
+      updatedAt: new Date(),
+    }));
+  };
+  const [actionItemUpdates, ongoingTaskUpdates, completedTaskUpdates] =
+    await Promise.all([
+      prepareBulkUpdate(ActionItem, actionItems, "action items"),
+      prepareBulkUpdate(OngoingTask, ongoingTasks, "ongoing tasks"),
+      prepareBulkUpdate(CompletedTask, completedTasks, "completed tasks"),
+    ]);
+  const updatePromises = [];
+  if (actionItemUpdates) {
+    updatePromises.push(
+      ActionItem.bulkCreate(actionItemUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
+    );
   }
+  if (ongoingTaskUpdates) {
+    updatePromises.push(
+      OngoingTask.bulkCreate(ongoingTaskUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
+    );
+  }
+  if (completedTaskUpdates) {
+    updatePromises.push(
+      CompletedTask.bulkCreate(completedTaskUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
+    );
+  }
+  await Promise.all(updatePromises);
+  await transaction.commit();
+  res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Weekly report updated successfully",
+  });
 });
