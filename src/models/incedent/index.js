@@ -22,6 +22,10 @@ export const Incident = db.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    voiceNote: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     incidentMessage: {
       type: DataTypes.STRING,
       allowNull: false,

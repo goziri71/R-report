@@ -76,39 +76,6 @@ export const sendEvent = TryCatchFunction(async (req, res) => {
   });
 });
 
-// export const getAllevent = TryCatchFunction(async (req, res) => {
-//   console.log(req);
-//   const { page = 1, limit = 10, sort = "desc" } = req.query;
-//   const offset = (page - 1) * limit;
-
-//   const userID = req.user;
-//   if (!userID) {
-//     throw new ErrorClass("Unauthorized User", 401);
-//   }
-
-//   const user = await User.findByPk(userID);
-//   if (!user) {
-//     throw new ErrorClass("User not found", 404);
-//   }
-
-//   const { count, rows } = await events.findAndCountAll({
-//     order: [["createdAt", sort.toUpperCase() === "ASC" ? "ASC" : "DESC"]],
-//     limit: parseInt(limit, 10),
-//     offset: parseInt(offset, 10),
-//   });
-
-//   const formattedEvents = rows.map((event) => formatEventDate(event));
-
-//   return res.status(200).json({
-//     code: 200,
-//     status: "success",
-//     data: formattedEvents,
-//     totalCount: count,
-//     currentPage: parseInt(page, 10),
-//     totalPages: Math.ceil(count / limit),
-//   });
-// });
-
 export const getAllevent = TryCatchFunction(async (req, res) => {
   const { page = 1, limit = 10, sort = "desc" } = req.query;
   const offset = (page - 1) * limit;
