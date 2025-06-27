@@ -180,11 +180,9 @@ const sendNotificationEmails = async (
       return;
     }
 
-    // Log the URLs being used in emails for debugging
     console.log("Email URLs - Photo:", incidentPhotoUrl);
     console.log("Email URLs - Voice Note:", voiceNoteUrl);
 
-    // Create base email template - KEEPING ORIGINAL TEMPLATE EXACTLY
     const createEmailPayload = (email) => ({
       subject: `Incident Report: ${incident.subject}`,
       recipient: {

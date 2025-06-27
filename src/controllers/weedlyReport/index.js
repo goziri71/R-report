@@ -264,7 +264,7 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     queryOptions.where.department = currentUser.occupation;
     queryOptions.include[0].where = {
       occupation: currentUser.occupation,
-      role: "user",
+      role: ["user", "admin"],
     };
   } else if (currentUser.role === "user") {
     queryOptions.where.userId = userId;
