@@ -174,9 +174,11 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   // Call external API first (keeping original flow)
   const data = await loginFromAlpha({ email_address, password });
 
-  if (data.status === false) {
-    throw new ErrorClass("invalid password", 401);
-  }
+  console.log(data);
+
+  // if (data.status === false) {
+  //   throw new ErrorClass("invalid password", 401);
+  // }
 
   if (!data) {
     throw new ErrorClass("Service temporarily down", 500);
