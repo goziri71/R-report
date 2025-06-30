@@ -174,17 +174,14 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   // Call external API first (keeping original flow)
   const data = await loginFromAlpha({ email_address, password });
 
-  console.log(data);
-
-  // if (data.status === false) {
-  //   throw new ErrorClass("invalid password", 401);
-  // }
+  if (data.status === 401) {
+    throw new ErrorClass("invalid password", 401);
+  }
 
   if (!data) {
     throw new ErrorClass("Service temporarily down", 500);
   }
 
-  // Check existing user using the API response email (original approach)
   let existingUser = await User.findOne({
     where: { email: data.data.email }, // Keep original field reference
     attributes: ["id"], // Only fetch needed fields for performance

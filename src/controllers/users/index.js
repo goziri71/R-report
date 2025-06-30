@@ -17,7 +17,6 @@ export const getAllUsers = TryCatchFunction(async (req, res) => {
 
 export const getSingleUserDetails = TryCatchFunction(async (req, res) => {
   const { id } = req.params;
-  console.log(id);
   if (!id) {
     throw new ErrorClass("User Id is required", 400);
   }

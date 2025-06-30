@@ -31,14 +31,44 @@ export const loginFromAlpha = async (payload) => {
     if (response.data.error === "Password cannot be empty") {
       return res.status(422).json(response.error);
     }
-
     return result;
   } catch (err) {
-    console.log(err);
+    // console.log(err);
+    // return {
+    //   status: false,
+    //   message: err.message || "Authentication failed",
+    //   error: err.response?.data || err,
+    // };
+    console.log("Login Error:", err);
+    if (err.response) {
+      const { status, data } = err.response;
+      if (
+        status === 500 &&
+        data?.success === false &&
+        (!data.error || Object.keys(data.error).length === 0)
+      ) {
+        return {
+          success: false,
+          status: 500,
+          message:
+            "Account temporarily locked due to multiple failed login attempts. Please log in to the WaverLite app first to unlock your account, then try again.",
+          error: "ACCOUNT_LOCKED",
+        };
+      }
+
+      return {
+        success: false,
+        status: status,
+        message: data?.error || data?.message || "Authentication failed",
+        error: data,
+      };
+    }
+
     return {
-      status: false,
-      message: err.message || "Authentication failed",
-      error: err.response?.data || err,
+      success: false,
+      status: 500,
+      message: err.message || "Network error occurred",
+      error: err.message,
     };
   }
 };

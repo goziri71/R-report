@@ -34,7 +34,6 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
     : [completedTasks];
 
   const userId = req.user;
-  console.log(userId);
   if (!userId) {
     throw new ErrorClass("User authentication required", 401);
   }

@@ -10,7 +10,6 @@ const axiosPublic = axios.create({
 
 export const ThirdPartyendpoint = TryCatchFunction(async (req, res) => {
   const payload = req.body;
-  console.log(payload);
   const response = await axiosPublic.post(
     "/api/v1/auth/login-password",
     payload,
@@ -19,6 +18,7 @@ export const ThirdPartyendpoint = TryCatchFunction(async (req, res) => {
     }
   );
   const result = await response.data;
+
   if (response.success === false) {
     return res.status(401).json({ error: response.error });
   }
