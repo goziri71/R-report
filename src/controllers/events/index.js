@@ -105,3 +105,76 @@ export const getAllevent = TryCatchFunction(async (req, res) => {
     limit: parsedLimit,
   });
 });
+
+export const updateEvent = TryCatchFunction(async (req, res) => {
+  const { id } = req.params;
+  const { eventTitle, eventDescription, eventDate, eventTime } = req.body;
+  const userID = req.user;
+
+  if (!userID) {
+    throw new ErrorClass("Unathorized user", 401);
+  }
+
+  //Verify user exists and is admin
+  const user = await User.findByPk(userID);
+  if (!user) {
+    throw new ErrorClass("User not found", 404);
+  }
+  if (user.role !== "admin") {
+    throw new ErrorClass("Only admins can update events", 403);
+  }
+
+  const event = await events.findByPk(id);
+  if (!event) {
+    throw new ErrorClass("Event not found", 404);
+  }
+
+  const updateData = {};
+  if (eventTitle !== undefined) {
+    updateData.eventTitle = eventTitle.trim();
+  }
+  if (eventDescription !== undefined) {
+    updateData.eventDescription = eventDescription.trim();
+  }
+
+  if (eventDate !== undefined) {
+    const dateValue = parseInt(eventDate, 10);
+    if (isNaN(dateValue) || eventDate.length !== 8) {
+      throw new ErrorClass(
+        "Event Date must be in MMDDYYYY format (e.g., '05152025' for May 15, 2025)",
+        400
+      );
+    }
+    updateData.eventDate = dateValue;
+  }
+
+  if (eventTime !== undefined) {
+    const timeFormatRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9]\s*(am|pm|AM|PM)$/i;
+    if (!timeFormatRegex.test(eventTime)) {
+      throw new ErrorClass(
+        "Event Time must be in format 'HH:MM AM/PM' (e.g., '9:00 AM' or '2:30 PM')",
+        400
+      );
+    }
+    const formattedTime = eventTime.replace(/\s*(am|pm)\s*$/i, (match) => {
+      return " " + match.trim().toUpperCase();
+    });
+    updateData.eventTime = formattedTime;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new ErrorClass("No valid fields provided for update", 400);
+  }
+
+  await event.update(updateData);
+
+  const updatedEvent = await events.findByPk(id);
+  const formattedEvent = formatEventDate(updatedEvent);
+
+  return res.status(200).json({
+    code: 200,
+    status: "success",
+    message: "Event updated successfully",
+    data: formattedEvent,
+  });
+});

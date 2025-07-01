@@ -170,6 +170,18 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       422
     );
   }
+  const currentUser = await User.findOne({
+    where: {
+      email: email_address,
+    },
+  });
+
+  if (currentUser.isActive !== true) {
+    throw new ErrorClass(
+      "your active has been deactivated, kindly reach out to the admin of your department",
+      403
+    );
+  }
 
   // Call external API first (keeping original flow)
   const data = await loginFromAlpha({ email_address, password });

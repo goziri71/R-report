@@ -4,8 +4,14 @@ import { User } from "../../models/auth/index.js";
 import { Incident } from "../../models/incedent/index.js";
 
 export const getAllUsers = TryCatchFunction(async (req, res) => {
-  const users = await User.findAll({ attributes: { exclude: ["password"] } });
+  const users = await User.findAll({
+    where: { isActive: true },
+    attributes: { exclude: ["password"] },
+  });
   if (!users) throw new ErrorClass("Sorry no user found", 4000);
+  if (!users || users.length === 0) {
+    throw new ErrorClass("Sorry no user found", 4000);
+  }
   return res.status(200).json({
     status: true,
     code: 200,
@@ -60,10 +66,21 @@ export const deleteUser = TryCatchFunction(async (req, res) => {
 });
 
 export const userStatus = TryCatchFunction(async (req, res) => {
+  const userID = req.user;
   const { userId, userStat } = req.params;
+
+  const currentUser = await User.findByPk(userID);
+  if (!currentUser) {
+    throw new ErrorClass("User not found", 404);
+  }
+  if (currentUser.role !== "admin" && currentUser.role !== "superadmin") {
+    throw new ErrorClass("Unathorized, User must be admin or superadmin", 403);
+  }
+
   if (!userId) {
     throw new ErrorClass("user id required", 400);
   }
+
   const user = await User.findByPk(userId);
   if (!user) {
     throw new ErrorClass("user not found", 404);
