@@ -238,7 +238,9 @@ export const loginUser = TryCatchFunction(async (req, res) => {
 });
 
 export const updateUser = TryCatchFunction(async (req, res) => {
+  const userID = req.user;
   const { id } = req.params;
+
   const requestBody = req.body;
 
   // Optimized field filtering
@@ -256,7 +258,7 @@ export const updateUser = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("No valid fields provided for update", 400);
   }
 
-  // Single query optimization
+  const currentUser = await User.findByPk(userID);
   const existingUser = await User.findByPk(id, {
     attributes: ["id", "role"],
   });
@@ -265,14 +267,12 @@ export const updateUser = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("User not found", 404);
   }
 
-  // Fixed authorization check
-  if (existingUser.role !== "admin" && existingUser.role !== "superadmin") {
+  if (currentUser.role !== "admin" && currentUser.role !== "superadmin") {
     throw new ErrorClass(
       "Unauthorized, User must be an admin or superadmin",
       403
     );
   }
-
   const [updatedRowsCount] = await User.update(updateFields, {
     where: { id },
   });
