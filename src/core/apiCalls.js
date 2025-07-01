@@ -33,12 +33,6 @@ export const loginFromAlpha = async (payload) => {
     }
     return result;
   } catch (err) {
-    // console.log(err);
-    // return {
-    //   status: false,
-    //   message: err.message || "Authentication failed",
-    //   error: err.response?.data || err,
-    // };
     console.log("Login Error:", err);
     if (err.response) {
       const { status, data } = err.response;
