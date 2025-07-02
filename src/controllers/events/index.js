@@ -115,7 +115,6 @@ export const updateEvent = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("Unathorized user", 401);
   }
 
-  //Verify user exists and is admin
   const user = await User.findByPk(userID);
   if (!user) {
     throw new ErrorClass("User not found", 404);
@@ -176,5 +175,39 @@ export const updateEvent = TryCatchFunction(async (req, res) => {
     status: "success",
     message: "Event updated successfully",
     data: formattedEvent,
+  });
+});
+
+export const deleteEvent = TryCatchFunction(async (req, res) => {
+  const { id } = req.params;
+  const userID = req.user;
+
+  if (!userID) {
+    throw new ErrorClass("User is required", 401);
+  }
+  if (!id) {
+    throw new ErrorClass("Id required to delete event", 400);
+  }
+  const currentUser = await User.findByPk(userID);
+  if (!currentUser) {
+    throw new ErrorClass("User not found", 404);
+  }
+  if (currentUser.role !== "admin") {
+    throw new ErrorClass(
+      "Unathorized, must be an admin to delete an event",
+      403
+    );
+  }
+  const event = await events.findByPk(id);
+  if (!event) {
+    throw new ErrorClass("Event not found", 404);
+  }
+
+  await event.destroy({ where: { id } });
+
+  res.status(200).json({
+    code: 200,
+    status: true,
+    message: "event has been deleted successfully",
   });
 });
