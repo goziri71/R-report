@@ -76,6 +76,55 @@ export const sendEvent = TryCatchFunction(async (req, res) => {
   });
 });
 
+export const depertmentalEvent = TryCatchFunction(async (req, res) => {
+  const userID = req.user;
+  const { eventTitle, eventDescription, eventDate, eventTime } = req.body;
+  let eventField = [];
+  if (!eventTitle) eventField.push("Title");
+  if (!eventDescription) eventField.push("Event Description");
+  if (!eventDate) eventField.push("Event Date");
+  if (!eventTime) eventField.push("Event Time");
+  if (eventField.length > 0) {
+    throw new ErrorClass(`${eventField.join(", ")} is required`, 400);
+  }
+  if (!userID) {
+    throw new ErrorClass("no user Id found", 404);
+  }
+
+  const user = await User.findByPk(userID);
+  if (!user) {
+    throw new ErrorClass("No user found", 404);
+  }
+  if (user.role !== "admin") {
+    throw new ErrorClass("Only team leads can make depertmental events", 403);
+  }
+  const eventDateTime = new Date(`${eventDate}T${eventTime}`);
+
+  if (eventDateTime <= new Date()) {
+    throw new ErrorClass("Event date and time must be in the future", 400);
+  }
+
+  const departmentalEvent = await Event.create({
+    title: eventTitle,
+    description: eventDescription,
+    dateTime: eventDateTime,
+    createdBy: userID,
+    eventType: "departmental",
+  });
+
+  res.status(201).json({
+    code: 201,
+    status: true,
+    message: "Departmental event created successfully",
+    event: {
+      id: departmentalEvent.id,
+      title: departmentalEvent.title,
+      description: departmentalEvent.description,
+      dateTime: departmentalEvent.dateTime,
+    },
+  });
+});
+
 export const getAllevent = TryCatchFunction(async (req, res) => {
   const { page = 1, limit = 10, sort = "desc" } = req.query;
   const offset = (page - 1) * limit;

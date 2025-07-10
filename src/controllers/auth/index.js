@@ -170,11 +170,14 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       422
     );
   }
+
   const currentUser = await User.findOne({
     where: {
       email: email_address,
     },
   });
+
+  console.log(currentUser);
 
   if (currentUser.isActive !== true) {
     throw new ErrorClass(
