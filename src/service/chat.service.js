@@ -142,7 +142,7 @@ export class ChatService {
     return Promise.all(
       chats.map(async (chat) => {
         const participant = chat.participants.find(
-          (p) => p.userId._id.toString() === userId
+          (p) => p.userId.toString() === userId
         );
         const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
 
