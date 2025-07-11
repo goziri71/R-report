@@ -39,7 +39,6 @@ export class ChatService {
       chatType: "individual",
       metadata: {
         name: chatName,
-        createdBy: userId,
         isPublic: false,
       },
       participants: [
@@ -128,29 +127,73 @@ export class ChatService {
     return chat;
   }
 
+  //   async getUserChats(userId) {
+  //     const chats = await Chat.find({
+  //       "participants.userId": userId,
+  //       "participants.isActive": true,
+  //       status: "active",
+  //       lastMessageId: { $exists: true },
+  //     })
+  //       .sort({ updatedAt: -1 });
+
+  //     return Promise.all(
+  //       chats.map(async (chat) => {
+  //         const participant = chat.participants.find(
+  //           (p) => p.userId.toString() === userId
+  //         );
+  //         const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
+
+  //         return {
+  //           ...chat.toObject(),
+  //           unreadCount: unreadCount,
+  //           lastSeen: participant?.lastSeen,
+  //         };
+  //       })
+  //     );
+  //   }
+
   async getUserChats(userId) {
     const chats = await Chat.find({
       "participants.userId": userId,
       "participants.isActive": true,
       status: "active",
-    })
-      //   .populate("lastMessageId")
-      //   .populate("participants.userId", "name avatar email")
-      .sort({ updatedAt: -1 });
+      lastMessageId: { $exists: true },
+    }).sort({ updatedAt: -1 });
 
-    // Add unread count for each chat
+    // Transform chats with additional user info
     return Promise.all(
       chats.map(async (chat) => {
         const participant = chat.participants.find(
           (p) => p.userId.toString() === userId
         );
         const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
+        const currentUser = await User.findByPk(userId, {
+          attributes: ["id", "firstName", "lastName"],
+        });
 
-        return {
-          ...chat.toObject(),
-          unreadCount: unreadCount,
-          lastSeen: participant?.lastSeen,
+        const recipientParticipant = chat.participants.find(
+          (p) => p.userId != userId
+        );
+        const recipientId = recipientParticipant?.userId;
+
+        console.log(recipientId);
+
+        const recipient = await User.findByPk(recipientId, {
+          attributes: ["id", "firstName", "lastName"],
+        });
+
+        const chatObj = chat.toObject();
+
+        // Add user info to metadata
+        chatObj.metadata = {
+          ...chatObj.metadata,
+          userName: `${currentUser.firstName} ${currentUser.lastName}`,
+          recipientId: recipient.id,
+          recipientName: `${recipient.firstName} ${recipient.lastName}`,
         };
+        chatObj.unreadCount = unreadCount;
+        chatObj.lastSeen = participant?.lastSeen;
+        return chatObj;
       })
     );
   }
