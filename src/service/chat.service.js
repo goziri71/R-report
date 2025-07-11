@@ -190,8 +190,8 @@ export class ChatService {
         // Add user info to metadata
         chatObj.metadata = {
           ...chatObj.metadata,
-          userId: currentUser.id,
-          userName: `${currentUser.firstName} ${currentUser.lastName}`,
+          senderId: currentUser.id,
+          senderName: `${currentUser.firstName} ${currentUser.lastName}`,
           recipientId: recipient.id,
           recipientName: `${recipient.firstName} ${recipient.lastName}`,
         };
