@@ -3,6 +3,7 @@ import {
   createWeeklyReport,
   getAllDepertmentReport,
   editeWeeklyReport,
+  deleteWeeklyReport,
 } from "../../controllers/weedlyReport/index.js";
 import { authorize } from "../../middleware/authorize.js";
 
@@ -14,6 +15,11 @@ router.patch(
   "/editTarget-weeklyReport/:targetUser",
   authorize,
   editeWeeklyReport
+);
+router.delete(
+  "/weekly-reports/:targetUser/:reportid",
+  authorize,
+  deleteWeeklyReport
 );
 
 export default router;

@@ -167,19 +167,13 @@ export class ChatService {
           (p) => p.userId.toString() === userId
         );
         const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
-
-        // Get user info for current user and recipient
         const currentUser = await User.findByPk(userId, {
           attributes: ["id", "firstName", "lastName"],
         });
-
         const recipientParticipant = chat.participants.find(
-          (p) => p.userId != userId // This gets the OTHER person
+          (p) => p.userId != userId
         );
-
         const recipientId = recipientParticipant?.userId;
-
-        console.log(recipientId);
 
         const recipient = await User.findByPk(recipientId, {
           attributes: ["id", "firstName", "lastName"],
@@ -187,7 +181,6 @@ export class ChatService {
 
         const chatObj = chat.toObject();
 
-        // Add user info to metadata
         chatObj.metadata = {
           ...chatObj.metadata,
           senderId: currentUser.id,
@@ -195,11 +188,7 @@ export class ChatService {
           recipientId: recipient.id,
           recipientName: `${recipient.firstName} ${recipient.lastName}`,
         };
-
-        // Add the unread count from the method (not from participant)
         chatObj.unreadCount = unreadCount;
-
-        // Add lastSeen from participant
         chatObj.lastSeen = participant?.lastSeen;
 
         return chatObj;

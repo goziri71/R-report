@@ -708,3 +708,83 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     message: "Weekly report updated successfully",
   });
 });
+
+export const deleteWeeklyReport = TryCatchFunction(async (req, res) => {
+  const currentUserId = req.user;
+  const { targetUser, reportid } = req.params;
+
+  const [currentUser, targetUserDetails] = await Promise.all([
+    User.findByPk(currentUserId),
+    User.findByPk(targetUser),
+  ]);
+
+  if (!currentUser) throw new ErrorClass("User not found", 404);
+  if (currentUser.role !== "admin")
+    throw new ErrorClass("Unauthorized user, admin only", 403);
+  if (!targetUserDetails) throw new ErrorClass("Target user not found", 404);
+
+  // Add validation for reportid
+  if (!reportid) {
+    throw new ErrorClass("Report ID is required", 400);
+  }
+
+  const transaction = await Sequelize.transaction();
+
+  try {
+    // Check if the weekly report exists for this user
+    const weeklyReportExists = await WeeklyReport.findOne({
+      where: { id: reportid, userId: targetUser },
+      transaction,
+    });
+
+    if (!weeklyReportExists) {
+      throw new ErrorClass("Weekly report not found for this user", 404);
+    }
+
+    // Delete all related items first (child records)
+    const [deletedActionItems, deletedOngoingTasks, deletedCompletedTasks] =
+      await Promise.all([
+        ActionItem.destroy({
+          where: { reportId: reportid, userId: targetUser },
+          transaction,
+        }),
+        OngoingTask.destroy({
+          where: { reportId: reportid, userId: targetUser },
+          transaction,
+        }),
+        CompletedTask.destroy({
+          where: { reportId: reportid, userId: targetUser },
+          transaction,
+        }),
+      ]);
+
+    // Delete the main weekly report (parent record)
+    const deletedWeeklyReport = await WeeklyReport.destroy({
+      where: { id: reportid, userId: targetUser },
+      transaction,
+    });
+
+    await transaction.commit();
+
+    res.status(200).json({
+      code: 200,
+      status: true,
+      message: "Weekly report and all related items deleted successfully",
+      data: {
+        reportId: reportid,
+        deletedWeeklyReport,
+        deletedActionItems,
+        deletedOngoingTasks,
+        deletedCompletedTasks,
+        totalDeleted:
+          deletedWeeklyReport +
+          deletedActionItems +
+          deletedOngoingTasks +
+          deletedCompletedTasks,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
