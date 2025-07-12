@@ -3,6 +3,85 @@ import { ChatService } from "../service/chat.service.js";
 
 const chatService = new ChatService();
 
+const sendNotificationToRecipients = async (
+  chatId,
+  senderId,
+  message,
+  chatService
+) => {
+  try {
+    // Get chat participants (excluding sender)
+    const chat = await Chat.findById(chatId);
+    if (!chat) return;
+
+    // Get sender details for notification
+    const sender = await User.findByPk(senderId, {
+      attributes: ["id", "firstName", "lastName"],
+    });
+
+    const senderName = `${sender.firstName} ${sender.lastName}`;
+
+    const recipients = chat.participants.filter(
+      (participant) =>
+        participant.userId.toString() !== senderId && participant.isActive
+    );
+
+    for (const recipient of recipients) {
+      const recipientId = recipient.userId.toString();
+
+      // Check if recipient has unseen messages and notifications aren't muted
+      const hasUnseenMessages = await chatService.hasUnseenMessages(
+        chatId,
+        recipientId
+      );
+
+      if (hasUnseenMessages) {
+        // Send push notification
+        await sendPushNotification(recipientId, {
+          title: senderName,
+          body: message.content,
+          data: {
+            chatId: chatId,
+            messageId: message._id,
+            senderId: senderId,
+            type: "new_message",
+          },
+        });
+
+        console.log(
+          `Notification sent to user with unseen messages: ${recipientId}`
+        );
+      } else {
+        console.log(
+          `No notification sent to user (no unseen messages or muted): ${recipientId}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Error sending notifications:", error);
+  }
+};
+
+// Push notification service
+const sendPushNotification = async (userId, notificationData) => {
+  try {
+    console.log(
+      `Sending push notification to user ${userId}:`,
+      notificationData
+    );
+
+    // Your push notification service implementation here
+    //await fcm.sendToUser(userId, notificationData);
+    // or
+    // await oneSignal.sendNotification(userId, notificationData);
+
+    return true;
+  } catch (error) {
+    console.error(`Failed to send push notification to user ${userId}:`, error);
+    return false;
+  }
+};
+
 export const handleChatSocketEvents = (io) => {
   const userSockets = new Map();
 
@@ -94,6 +173,12 @@ export const handleChatSocketEvents = (io) => {
         );
 
         io.to(chatId).emit("new_message", populatedMessage);
+        await sendNotificationToRecipients(
+          chatId,
+          userId,
+          populatedMessage,
+          chatService
+        );
 
         socket.emit("message_delivered", {
           messageId: message._id,

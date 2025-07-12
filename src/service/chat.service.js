@@ -285,6 +285,35 @@ export class ChatService {
     return message;
   }
 
+  async hasUnseenMessages(chatId, userId) {
+    try {
+      // Get user's unread count from the chat participants
+      const chat = await Chat.findOne(
+        {
+          _id: chatId,
+          "participants.userId": userId,
+        },
+        {
+          "participants.$": 1,
+        }
+      );
+
+      if (!chat || !chat.participants.length) return false;
+
+      const participant = chat.participants[0];
+
+      // Check if user has muted notifications
+      if (participant.notificationSettings?.muted) {
+        return false;
+      }
+      // Return true if unread count is greater than 0
+      return participant.unreadCount > 0;
+    } catch (error) {
+      console.error("Error checking unseen messages:", error);
+      return false;
+    }
+  }
+
   async getPopulatedMessage(messageId) {
     return await Message.findById(messageId);
     //   .populate("senderId", "name avatar email")
