@@ -11,7 +11,6 @@ export const createDirectMessage = TryCatchFunction(async (req, res) => {
   if (!recipientId) {
     throw new ErrorClass("Recipient ID is required", 422);
   }
-
   const chat = await chatService.getOrCreateDirectChat(userId, recipientId);
 
   return res.status(200).json({

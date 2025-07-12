@@ -40,6 +40,7 @@ export class ChatService {
       metadata: {
         name: chatName,
         isPublic: false,
+        createdBy: userId,
       },
       participants: [
         {
