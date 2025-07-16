@@ -55,4 +55,9 @@ export const User = db.define("User", {
     defaultValue: "user",
     allowNull: false,
   },
+  pushSubscription: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+  },
 });

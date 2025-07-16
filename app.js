@@ -16,6 +16,7 @@ import setupAssociations from "./src/models/dbasociation.js";
 import http from "http"; // Import http to create the server for socket.io
 import { Server } from "socket.io"; // Import socket.io
 import { handleChatSocketEvents } from "./src/service/chatSocketHandler.js";
+import { User } from "./src/models/auth/index.js";
 
 const app = express();
 const port = Config.port;
@@ -48,6 +49,37 @@ app.use("/api/v1/admin", adminEvent);
 app.use("/api/v1/user", createWeeklyReport);
 app.use("/api/v1/thirdparty", thirdPartyRoutes);
 app.use("/api/v1/chat", chatRoutes);
+
+app.post("/api/subscribe", async (req, res) => {
+  try {
+    const { userId, subscription } = req.body;
+
+    await User.update(
+      { pushSubscription: subscription },
+      { where: { id: userId } }
+    );
+
+    console.log(`Push subscription saved for user: ${userId}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving subscription:", error);
+    res.status(500).json({ error: "Failed to save subscription" });
+  }
+});
+
+app.post("/api/unsubscribe", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    await User.update({ pushSubscription: null }, { where: { id: userId } });
+
+    console.log(`Push subscription removed for user: ${userId}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error removing subscription:", error);
+    res.status(500).json({ error: "Failed to remove subscription" });
+  }
+});
 
 app.use(ErrorHandlerMiddleware);
 

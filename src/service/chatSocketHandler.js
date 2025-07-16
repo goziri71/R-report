@@ -1,8 +1,33 @@
 import Chat from "../models/chat/chat.js";
 import { ChatService } from "../service/chat.service.js";
+import webpush from "web-push";
+import { User } from "../models/auth/index.js"; // Make sure this import exists
 
 const chatService = new ChatService();
 
+// Configure VAPID keys
+webpush.setVapidDetails(
+  `mailto:${process.env.VAPID_EMAIL}`,
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+// Push notification service
+const sendPushNotification = async (subscription, payload) => {
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.error("Push notification error:", error);
+    // If subscription is invalid (410), it should be removed from database
+    if (error.statusCode === 410) {
+      return "invalid_subscription";
+    }
+    return false;
+  }
+};
+
+// Updated notification function
 const sendNotificationToRecipients = async (
   chatId,
   senderId,
@@ -11,7 +36,7 @@ const sendNotificationToRecipients = async (
 ) => {
   try {
     // Get chat participants (excluding sender)
-    const chat = await Chat.findById(chatId);
+    const chat = await Chat.findByPk(chatId);
     if (!chat) return;
 
     // Get sender details for notification
@@ -29,56 +54,46 @@ const sendNotificationToRecipients = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
 
-      // Check if recipient has unseen messages and notifications aren't muted
-      const hasUnseenMessages = await chatService.hasUnseenMessages(
-        chatId,
-        recipientId
-      );
+      // Get recipient user data including push subscription
+      const recipientUser = await User.findByPk(recipientId);
 
-      if (hasUnseenMessages) {
+      if (recipientUser && recipientUser.pushSubscription) {
         // Send push notification
-        await sendPushNotification(recipientId, {
+        const payload = {
           title: senderName,
           body: message.content,
+          icon: "/icon-192x192.png",
+          badge: "/badge-72x72.png",
           data: {
             chatId: chatId,
             messageId: message._id,
             senderId: senderId,
-            type: "new_message",
+            url: `/chat/${chatId}`,
           },
-        });
+        };
 
-        console.log(
-          `Notification sent to user with unseen messages: ${recipientId}`
+        const result = await sendPushNotification(
+          recipientUser.pushSubscription,
+          payload
         );
+
+        if (result === "invalid_subscription") {
+          // Remove invalid subscription
+          await User.findByIdAndUpdate(recipientId, {
+            pushSubscription: null,
+          });
+          console.log(
+            `Removed invalid push subscription for user: ${recipientId}`
+          );
+        } else if (result) {
+          console.log(`Push notification sent to user: ${recipientId}`);
+        }
       } else {
-        console.log(
-          `No notification sent to user (no unseen messages or muted): ${recipientId}`
-        );
+        console.log(`No push subscription found for user: ${recipientId}`);
       }
     }
   } catch (error) {
     console.error("Error sending notifications:", error);
-  }
-};
-
-// Push notification service
-const sendPushNotification = async (userId, notificationData) => {
-  try {
-    console.log(
-      `Sending push notification to user ${userId}:`,
-      notificationData
-    );
-
-    // Your push notification service implementation here
-    //await fcm.sendToUser(userId, notificationData);
-    // or
-    // await oneSignal.sendNotification(userId, notificationData);
-
-    return true;
-  } catch (error) {
-    console.error(`Failed to send push notification to user ${userId}:`, error);
-    return false;
   }
 };
 
@@ -173,6 +188,8 @@ export const handleChatSocketEvents = (io) => {
         );
 
         io.to(chatId).emit("new_message", populatedMessage);
+
+        // Send push notifications - this is the updated call
         await sendNotificationToRecipients(
           chatId,
           userId,

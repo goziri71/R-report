@@ -44,9 +44,8 @@ export const loginFromAlpha = async (payload) => {
         return {
           success: false,
           status: 500,
-          message:
-            "Account temporarily locked due to multiple failed login attempts. Please log in to the WaverLite app first to unlock your account, then try again.",
-          error: "ACCOUNT_LOCKED",
+          message: "Internal Server Error",
+          error: "Error",
         };
       }
 
