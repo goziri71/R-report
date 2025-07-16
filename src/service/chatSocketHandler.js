@@ -140,9 +140,17 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           message: "Successfully joined chat",
         });
-        socket.to(chatId).emit("user_online", { userId });
+
+        socket.to(chatId).emit("user_online", {
+          userId,
+          chatId,
+          timestamp: new Date().toISOString(),
+        });
 
         console.log(`User ${userId} joined chat room: ${chatId}`);
+        console.log(
+          `Emitting user_online event for user ${userId} to chat ${chatId}`
+        );
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
