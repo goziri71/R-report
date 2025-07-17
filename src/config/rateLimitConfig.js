@@ -14,7 +14,7 @@ export const rateLimitConfig = {
   // Strict limiter ONLY for authentication routes (login)
   auth: {
     windowMs: 10 * 60 * 1000, // 15 minutes
-    max: 3, // 5 login attempts per window
+    max: 10, // 5 login attempts per window
     message: {
       error: "Too many login attempts, please try again later.",
       retryAfter: "15 minutes",
