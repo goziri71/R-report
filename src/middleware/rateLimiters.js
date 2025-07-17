@@ -5,7 +5,6 @@ console.log("🔍 Rate limiter config:", rateLimitConfig);
 
 // Factory function to create express rate limiters
 const createRateLimit = (config) => {
-  console.log("🔧 Creating rate limiter with config:", config);
   return rateLimit({
     ...config,
     // Custom handler for when rate limit is exceeded
@@ -36,5 +35,3 @@ export const rateLimiters = {
   global: createRateLimit(rateLimitConfig.global),
   auth: createRateLimit(rateLimitConfig.auth),
 };
-
-console.log("✅ Rate limiters created successfully");
