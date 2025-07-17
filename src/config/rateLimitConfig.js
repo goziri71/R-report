@@ -1,7 +1,7 @@
 export const rateLimitConfig = {
   // Global rate limiter - very permissive, just basic protection
   global: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 50 * 60 * 1000, // 15 minutes
     max: 999999999,
     message: {
       error: "Too many requests from this IP, please try again later.",
@@ -14,7 +14,7 @@ export const rateLimitConfig = {
   // Strict limiter ONLY for authentication routes (login)
   auth: {
     windowMs: 10 * 60 * 1000, // 15 minutes
-    max: 10, // 5 login attempts per window
+    max: 20, // 5 login attempts per window
     message: {
       error: "Too many login attempts, please try again later.",
       retryAfter: "15 minutes",
