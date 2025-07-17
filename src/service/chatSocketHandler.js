@@ -157,6 +157,41 @@ export const handleChatSocketEvents = (io) => {
       }
     });
 
+    socket.on("leave_chat", async (data) => {
+      const { chatId } = data;
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        // Leave the socket room
+        socket.leave(chatId);
+
+        // Update last seen before leaving
+        await chatService.updateLastSeen(chatId, userId);
+
+        // Notify other users in the chat that this user is offline
+        socket.to(chatId).emit("user_offline", {
+          userId,
+          chatId,
+          timestamp: new Date().toISOString(),
+        });
+
+        socket.emit("left_chat", {
+          chatId,
+          message: "Successfully left chat",
+        });
+
+        console.log(`User ${userId} left chat room: ${chatId}`);
+      } catch (error) {
+        console.error("Error leaving chat:", error);
+        socket.emit("error", { message: "Failed to leave chat" });
+      }
+    });
+
     socket.on("send_message", async (data) => {
       const {
         chatId,
@@ -301,15 +336,28 @@ export const handleChatSocketEvents = (io) => {
     socket.on("disconnect", () => {
       const userId = socket.userId;
 
-      if (userId) {
-        userSockets.delete(userId);
+      // if (userId) {
+      //   userSockets.delete(userId);
 
-        socket.rooms.forEach((room) => {
-          if (room !== socket.id) {
-            socket.to(room).emit("user_offline", { userId });
-          }
+      //   socket.rooms.forEach((room) => {
+      //     if (room !== socket.id) {
+      //       socket.to(room).emit("user_offline", { userId });
+      //     }
+      //   });
+      // }
+
+      const rooms = Array.from(socket.rooms).filter(
+        (room) => room !== socket.id
+      );
+
+      // Notify each chat room that the user is offline
+      rooms.forEach((chatId) => {
+        socket.to(chatId).emit("user_offline", {
+          userId,
+          chatId,
+          timestamp: new Date().toISOString(),
         });
-      }
+      });
 
       console.log("User disconnected:", socket.id);
     });

@@ -3,6 +3,7 @@ import cors from "cors";
 import { Config } from "./src/config/config.js";
 import { connectDB, initializeDatabases } from "./src/database/database.js";
 import { ErrorHandlerMiddleware } from "./src/middleware/errorHandler.js";
+import { rateLimiters } from "./src/middleware/rateLimiters.js";
 import userRouter from "./src/routes/admin/users/index.js";
 import authRouter from "./src/routes/user/auth/index.js";
 import incedentRoutes from "./src/routes/user/incident/index.js";
@@ -22,10 +23,9 @@ const app = express();
 const port = Config.port;
 const server = http.createServer(app);
 const io = new Server(server);
-handleChatSocketEvents(io);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(
   cors({
     origin: [
@@ -36,13 +36,16 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(rateLimiters.global);
 setupAssociations();
+
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 app.use("/api/v1", userRouter);
-app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/auth", rateLimiters.auth, authRouter);
 app.use("/api/v1/incident", incedentRoutes);
 app.use("/api/v1/report", allusereport);
 app.use("/api/v1/admin", adminEvent);
@@ -80,6 +83,8 @@ app.post("/api/unsubscribe", async (req, res) => {
     res.status(500).json({ error: "Failed to remove subscription" });
   }
 });
+
+handleChatSocketEvents(io);
 
 app.use(ErrorHandlerMiddleware);
 
