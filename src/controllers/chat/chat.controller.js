@@ -1,6 +1,7 @@
 import { TryCatchFunction } from "../../utils/tryCatch/index.js";
 import { ErrorClass } from "../../utils/errorClass/index.js";
 import { ChatService } from "../../service/chat.service.js";
+import { User } from "../../models/auth/index.js";
 
 const chatService = new ChatService();
 
@@ -317,3 +318,78 @@ export const getUnreadMessagesCount = TryCatchFunction(async (req, res) => {
     data: { unreadCount },
   });
 });
+
+// Add these exports to your existing chat.controller.js file
+
+export const subscribeToPush = async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    const userId = req.user; // From your authorize middleware
+
+    console.log("💾 Storing push subscription for user:", userId);
+
+    if (!subscription) {
+      return res.status(400).json({
+        error: "Subscription data is required",
+      });
+    }
+
+    // Validate subscription format
+    if (
+      !subscription.endpoint ||
+      !subscription.keys ||
+      !subscription.keys.p256dh ||
+      !subscription.keys.auth
+    ) {
+      return res.status(400).json({
+        error: "Invalid subscription format",
+      });
+    }
+
+    const user = await User.findByPk(userId);
+
+    await user.update(
+      { pushSubscription: subscription }, // Fields to update
+      { where: { id: userId } } // Condition to find the user by userId
+    );
+
+    console.log("✅ Push subscription stored successfully for user:", userId);
+
+    res.status(200).json({
+      status: true,
+      code: 200,
+      message: "Push subscription stored successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error storing push subscription:", error);
+    res.status(500).json({
+      error: "Failed to store push subscription",
+      details: error.message,
+    });
+  }
+};
+
+export const unsubscribeFromPush = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Import User model (adjust the import path to match your project structure)
+    const { User } = await import("../../models/auth/index.js");
+
+    await User.findByIdAndUpdate(userId, {
+      pushSubscription: null,
+    });
+
+    console.log("🗑️ Push subscription removed for user:", userId);
+
+    res.status(200).json({
+      message: "Push subscription removed successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error removing push subscription:", error);
+    res.status(500).json({
+      error: "Failed to remove push subscription",
+      details: error.message,
+    });
+  }
+};

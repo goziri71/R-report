@@ -15,6 +15,8 @@ import {
   updateNotificationSettings,
   markMessageAsRead,
   getUnreadMessagesCount,
+  subscribeToPush, // This should now work
+  unsubscribeFromPush, // This should now work
 } from "../../controllers/chat/chat.controller.js";
 import { authorize } from "../../middleware/authorize.js";
 
@@ -41,5 +43,8 @@ router.delete("/:chatId/participants", authorize, removeParticipant); // Remove 
 
 // Settings
 router.put("/:chatId/notifications", authorize, updateNotificationSettings); // Update notifications
+
+router.post("/push/subscribe", authorize, subscribeToPush);
+router.delete("/push/unsubscribe", authorize, unsubscribeFromPush);
 
 export default router;

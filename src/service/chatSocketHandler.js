@@ -400,7 +400,7 @@ const sendNotificationToRecipients = async (
   chatService
 ) => {
   try {
-    const chat = await Chat.findByPk(chatId);
+    const chat = await Chat.findById(chatId);
     if (!chat) return;
 
     const sender = await User.findByPk(senderId, {
@@ -417,6 +417,18 @@ const sendNotificationToRecipients = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
 
+      const hasUnseen = await chatService.hasUnseenMessages(
+        chatId,
+        recipientId
+      );
+      if (!hasUnseen) {
+        console.log(
+          "🔇 User has muted notifications or no unseen messages:",
+          recipientId
+        );
+        continue;
+      }
+      s;
       const recipientUser = await User.findByPk(recipientId);
 
       if (recipientUser && recipientUser.pushSubscription) {
