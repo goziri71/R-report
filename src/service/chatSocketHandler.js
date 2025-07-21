@@ -379,18 +379,96 @@ webpush.setVapidDetails(
 );
 
 // Push notification service
-const sendPushNotification = async (subscription, payload) => {
-  try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
-    return true;
-  } catch (error) {
-    console.error("Push notification error:", error);
-    if (error.statusCode === 410) {
-      return "invalid_subscription";
-    }
-    return false;
-  }
-};
+// const sendPushNotification = async (subscription, payload) => {
+//   try {
+//     await webpush.sendNotification(subscription, JSON.stringify(payload));
+//     return true;
+//   } catch (error) {
+//     console.error("Push notification error:", error);
+//     if (error.statusCode === 410) {
+//       return "invalid_subscription";
+//     }
+//     return false;
+//   }
+// };
+
+// // Updated notification function
+// const sendNotificationToRecipients = async (
+//   chatId,
+//   senderId,
+//   message,
+//   chatService
+// ) => {
+//   try {
+//     const chat = await Chat.findById(chatId);
+//     if (!chat) return;
+
+//     const sender = await User.findByPk(senderId, {
+//       attributes: ["id", "firstName", "lastName"],
+//     });
+
+//     const senderName = `${sender.firstName} ${sender.lastName}`;
+
+//     const recipients = chat.participants.filter(
+//       (participant) =>
+//         participant.userId.toString() !== senderId && participant.isActive
+//     );
+
+//     for (const recipient of recipients) {
+//       const recipientId = recipient.userId.toString();
+
+//       console.log(recipientId);
+
+//       const hasUnseen = await chatService.hasUnseenMessages(
+//         chatId,
+//         recipientId
+//       );
+//       if (!hasUnseen) {
+//         console.log(
+//           "🔇 User has muted notifications or no unseen messages:",
+//           recipientId
+//         );
+//         continue;
+//       }
+//       const recipientUser = await User.findByPk(recipientId);
+
+//       if (recipientUser && recipientUser.pushSubscription) {
+//         const payload = {
+//           title: senderName,
+//           body: message.content,
+//           icon: "/icon-192x192.png",
+//           badge: "/badge-72x72.png",
+//           data: {
+//             chatId: chatId,
+//             messageId: message._id,
+//             senderId: senderId,
+//             url: `/chat/${chatId}`,
+//           },
+//         };
+
+//         const result = await sendPushNotification(
+//           recipientUser.pushSubscription,
+//           payload
+//         );
+
+//         if (result === "invalid_subscription") {
+//           await User.findByIdAndUpdate(recipientId, {
+//             pushSubscription: null,
+//           });
+//           console.log(
+//             `Removed invalid push subscription for user: ${recipientId}`
+//           );
+//         } else if (result) {
+//           console.log(`Push notification sent to user: ${recipientId}`);
+//         }
+//       } else {
+//         console.log(`No push subscription found for user: ${recipientId}`);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error sending notifications:", error);
+//   }
+// };
 
 // Updated notification function
 const sendNotificationToRecipients = async (
@@ -400,15 +478,18 @@ const sendNotificationToRecipients = async (
   chatService
 ) => {
   try {
+    // Get chat participants (excluding sender)
     const chat = await Chat.findById(chatId);
     if (!chat) return;
 
+    // Get sender details for notification
     const sender = await User.findByPk(senderId, {
       attributes: ["id", "firstName", "lastName"],
     });
 
     const senderName = `${sender.firstName} ${sender.lastName}`;
 
+    // Get all participants excluding the sender
     const recipients = chat.participants.filter(
       (participant) =>
         participant.userId.toString() !== senderId && participant.isActive
@@ -417,6 +498,7 @@ const sendNotificationToRecipients = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
 
+      // Check if the recipient has unread messages
       const hasUnseen = await chatService.hasUnseenMessages(
         chatId,
         recipientId
@@ -426,10 +508,12 @@ const sendNotificationToRecipients = async (
           "🔇 User has muted notifications or no unseen messages:",
           recipientId
         );
-        continue;
+        continue; // Skip sending notification if the user has muted notifications or no unseen messages
       }
+
       const recipientUser = await User.findByPk(recipientId);
 
+      // Only send notification if recipient has a valid push subscription
       if (recipientUser && recipientUser.pushSubscription) {
         const payload = {
           title: senderName,
@@ -444,12 +528,14 @@ const sendNotificationToRecipients = async (
           },
         };
 
+        // Send push notification to the recipient
         const result = await sendPushNotification(
           recipientUser.pushSubscription,
           payload
         );
 
         if (result === "invalid_subscription") {
+          // Remove invalid subscription from database
           await User.findByIdAndUpdate(recipientId, {
             pushSubscription: null,
           });
