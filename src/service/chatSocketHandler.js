@@ -1,17 +1,11 @@
 import Chat from "../models/chat/chat.js";
 import { ChatService } from "../service/chat.service.js";
 import webpush from "web-push";
-import { User } from "../models/auth/index.js";
+import { User } from "../models/auth/index.js"; // Make sure this import exists
 
 const chatService = new ChatService();
 
-// Configure VAPID keys with error checking
-console.log("VAPID Configuration:", {
-  email: process.env.VAPID_EMAIL ? "Set" : "Missing",
-  publicKey: process.env.VAPID_PUBLIC_KEY ? "Set" : "Missing",
-  privateKey: process.env.VAPID_PRIVATE_KEY ? "Set" : "Missing",
-});
-
+// Configure VAPID keys
 webpush.setVapidDetails(
   `mailto:${process.env.VAPID_EMAIL}`,
   process.env.VAPID_PUBLIC_KEY,
@@ -21,91 +15,47 @@ webpush.setVapidDetails(
 // Push notification service
 const sendPushNotification = async (subscription, payload) => {
   try {
-    console.log("📤 Attempting to send push notification:", {
-      endpoint: subscription.endpoint?.substring(0, 50) + "...",
-      payload: payload,
-    });
-
     await webpush.sendNotification(subscription, JSON.stringify(payload));
-    console.log("✅ Push notification sent successfully");
     return true;
   } catch (error) {
-    console.error("❌ Push notification error:", error);
-
+    console.error("Push notification error:", error);
     // If subscription is invalid (410), it should be removed from database
     if (error.statusCode === 410) {
-      console.log("🗑️ Subscription is invalid (410), marking for removal");
       return "invalid_subscription";
     }
     return false;
   }
 };
 
-// Updated notification function with proper debugging
+// Updated notification function
 const sendNotificationToRecipients = async (
   chatId,
   senderId,
   message,
   chatService
 ) => {
-  console.log("🔔 Starting notification process for chat:", chatId);
-
   try {
-    // FIXED: Use proper MongoDB query since Chat is a MongoDB model
+    // FIXED: Changed from Chat.findByPk to Chat.findById (MongoDB syntax)
     const chat = await Chat.findById(chatId);
-    if (!chat) {
-      console.log("❌ Chat not found:", chatId);
-      return;
-    }
+    if (!chat) return;
 
-    // Get sender details for notification (User is Sequelize, so use findByPk)
+    // Get sender details for notification
     const sender = await User.findByPk(senderId, {
       attributes: ["id", "firstName", "lastName"],
     });
 
-    if (!sender) {
-      console.log("❌ Sender not found:", senderId);
-      return;
-    }
-
     const senderName = `${sender.firstName} ${sender.lastName}`;
-    console.log("👤 Sender:", senderName);
 
     const recipients = chat.participants.filter(
       (participant) =>
         participant.userId.toString() !== senderId && participant.isActive
     );
 
-    console.log("📬 Found recipients:", recipients.length);
-
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
-      console.log(`🔍 Processing recipient: ${recipientId}`);
 
-      // Check if user has unseen messages and notifications enabled
-      const hasUnseen = await chatService.hasUnseenMessages(
-        chatId,
-        recipientId
-      );
-      if (!hasUnseen) {
-        console.log(
-          `🔇 User ${recipientId} has muted notifications or no unseen messages`
-        );
-        continue;
-      }
-
-      // Get recipient user data including push subscription (User is Sequelize)
+      // Get recipient user data including push subscription
       const recipientUser = await User.findByPk(recipientId);
-
-      if (!recipientUser) {
-        console.log(`❌ Recipient user not found: ${recipientId}`);
-        continue;
-      }
-
-      console.log(
-        `📱 Push subscription exists for ${recipientId}:`,
-        !!recipientUser.pushSubscription
-      );
 
       if (recipientUser && recipientUser.pushSubscription) {
         // Send push notification
@@ -122,35 +72,29 @@ const sendNotificationToRecipients = async (
           },
         };
 
-        console.log(`📤 Sending push notification to ${recipientId}:`, payload);
-
         const result = await sendPushNotification(
           recipientUser.pushSubscription,
           payload
         );
 
         if (result === "invalid_subscription") {
-          // FIXED: Use proper Sequelize syntax to remove invalid subscription
+          // FIXED: Changed from User.findByIdAndUpdate to User.update (Sequelize syntax)
           await User.update(
             { pushSubscription: null },
             { where: { id: recipientId } }
           );
           console.log(
-            `🗑️ Removed invalid push subscription for user: ${recipientId}`
+            `Removed invalid push subscription for user: ${recipientId}`
           );
         } else if (result) {
-          console.log(`✅ Push notification sent to user: ${recipientId}`);
-        } else {
-          console.log(
-            `❌ Failed to send push notification to user: ${recipientId}`
-          );
+          console.log(`Push notification sent to user: ${recipientId}`);
         }
       } else {
-        console.log(`📵 No push subscription found for user: ${recipientId}`);
+        console.log(`No push subscription found for user: ${recipientId}`);
       }
     }
   } catch (error) {
-    console.error("💥 Error sending notifications:", error);
+    console.error("Error sending notifications:", error);
   }
 };
 
@@ -177,7 +121,6 @@ export const handleChatSocketEvents = (io) => {
       }
 
       try {
-        // FIXED: Use proper MongoDB query for Chat model
         const chat = await Chat.findOne({
           _id: chatId,
           "participants.userId": userId,
@@ -206,6 +149,9 @@ export const handleChatSocketEvents = (io) => {
         });
 
         console.log(`User ${userId} joined chat room: ${chatId}`);
+        console.log(
+          `Emitting user_online event for user ${userId} to chat ${chatId}`
+        );
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
@@ -222,9 +168,13 @@ export const handleChatSocketEvents = (io) => {
       }
 
       try {
+        // Leave the socket room
         socket.leave(chatId);
+
+        // Update last seen before leaving
         await chatService.updateLastSeen(chatId, userId);
 
+        // Notify other users in the chat that this user is offline
         socket.to(chatId).emit("user_offline", {
           userId,
           chatId,
@@ -277,18 +227,13 @@ export const handleChatSocketEvents = (io) => {
           messageType,
           additionalData
         );
-
         const populatedMessage = await chatService.getPopulatedMessage(
           message._id
         );
 
         io.to(chatId).emit("new_message", populatedMessage);
 
-        // Send push notifications
-        console.log(
-          "🚀 Triggering push notifications for message:",
-          message._id
-        );
+        // Send push notifications - this is the updated call
         await sendNotificationToRecipients(
           chatId,
           userId,
@@ -355,6 +300,7 @@ export const handleChatSocketEvents = (io) => {
 
       try {
         const message = await chatService.deleteMessage(messageId, userId);
+
         io.to(message.chatId).emit("message_deleted", { messageId });
       } catch (error) {
         console.error("Error deleting message:", error);
@@ -365,12 +311,14 @@ export const handleChatSocketEvents = (io) => {
     socket.on("typing_start", (data) => {
       const { chatId } = data;
       const userId = socket.userId;
+
       socket.to(chatId).emit("user_typing", { userId, isTyping: true });
     });
 
     socket.on("typing_stop", (data) => {
       const { chatId } = data;
       const userId = socket.userId;
+
       socket.to(chatId).emit("user_typing", { userId, isTyping: false });
     });
 
@@ -389,23 +337,18 @@ export const handleChatSocketEvents = (io) => {
     socket.on("disconnect", () => {
       const userId = socket.userId;
 
-      if (userId) {
-        userSockets.delete(userId);
+      const rooms = Array.from(socket.rooms).filter(
+        (room) => room !== socket.id
+      );
 
-        const rooms = Array.from(socket.rooms).filter(
-          (room) => room !== socket.id
-        );
-
-        rooms.forEach((chatId) => {
-          socket.to(chatId).emit("user_offline", {
-            userId,
-            chatId,
-            timestamp: new Date().toISOString(),
-          });
+      // Notify each chat room that the user is offline
+      rooms.forEach((chatId) => {
+        socket.to(chatId).emit("user_offline", {
+          userId,
+          chatId,
+          timestamp: new Date().toISOString(),
         });
-
-        console.log(`User ${userId} disconnected from socket ${socket.id}`);
-      }
+      });
 
       console.log("User disconnected:", socket.id);
     });
