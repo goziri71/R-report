@@ -54,19 +54,65 @@
 //   }
 // });
 
-console.log("🚀 MINIMAL SW LOADED");
+// Service Worker for handling push notifications
+self.addEventListener("push", (event) => {
+  console.log("Push event received:", event);
 
-self.addEventListener("push", function (event) {
-  console.log("🔔 PUSH RECEIVED");
-  console.log("Event:", event);
-  console.log("Has data:", event.data ? "YES" : "NO");
+  if (event.data) {
+    try {
+      const data = event.data.json(); // Parse the push data as JSON
 
-  // Force a notification no matter what
-  event.waitUntil(
-    self.registration.showNotification("FORCE NOTIFICATION", {
-      body: "This should always show",
-    })
-  );
+      const options = {
+        body: data.body,
+        icon: data.icon || "/icon-192x192.png",
+        badge: data.badge || "/badge-72x72.png",
+        data: data.data, // Any custom data you want to store with the notification
+        requireInteraction: true, // Keep the notification open until interacted with
+        actions: [
+          {
+            action: "open",
+            title: "Open Chat", // Action for opening the chat
+          },
+          {
+            action: "close",
+            title: "Close", // Action for closing the notification
+          },
+        ],
+      };
+
+      // Show notification
+      event.waitUntil(self.registration.showNotification(data.title, options));
+    } catch (error) {
+      console.error("Error parsing push data:", error);
+    }
+  }
 });
 
-console.log("🎯 LISTENERS REGISTERED");
+// Handle notification click
+self.addEventListener("notificationclick", (event) => {
+  console.log("Notification clicked:", event);
+
+  event.notification.close(); // Close the notification when clicked
+
+  // If the user clicks "open" or no action is taken (default), open the chat page
+  if (event.action === "open" || !event.action) {
+    event.waitUntil(
+      clients.matchAll({ type: "window" }).then((clientList) => {
+        // Check if app is already open and contains the chat page
+        for (let i = 0; i < clientList.length; i++) {
+          const client = clientList[i];
+          if (client.url.includes("/chat") && "focus" in client) {
+            return client.focus(); // Focus the chat window if already open
+          }
+        }
+
+        // If no chat window is open, open a new one
+        if (clients.openWindow) {
+          return clients.openWindow(event.notification.data.url || "/");
+        }
+      })
+    );
+  } else if (event.action === "close") {
+    console.log("User clicked 'close'. Notification closed.");
+  }
+});

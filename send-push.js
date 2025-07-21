@@ -13,13 +13,13 @@ webpush.setVapidDetails(
 // Paste your subscription object here and encode the endpoint URL
 const subscription = {
   endpoint: encodeURI(
-    "https://fcm.googleapis.com/fcm/send/dHZnDc8pGPg:APA91bFBFPG1iW99c6DKXYIwU6yxnfNh4URBwBadxrTLl-hCx76PhAFEbgwXVi0mmL7Ti6E0teYkIr7XX4GDN6mePOwK5ZjBwW80bmX9DM9iInHHKO3-UO6wlqiRvMLV-5A9gn33qXD3"
+    "https://fcm.googleapis.com/fcm/send/fKI5TbE2Cu0:APA91bE5YHMPGi-DlMFO1Egn76jjDKoGuC1DN3NcR0Uk-pQEjxglY2eURXvXWSUcQOK6NA9yrUx14W4a1_zKeFCyTLFdw7zlGxfgT4j4IxNlRHNAduZMRPf529ZCDVqPSKSjWxNwsa4O"
   ),
   expirationTime: null,
   keys: {
     p256dh:
-      "BFoycOZusL9Klz9RmtcaENbWzBatnOY6d2mJMlY8JQGJeHTGuR4tEAh1WHVvENzIUwVqgHkxqog4srJAQdP6/7Q=",
-    auth: "ObWWDFRhPWVQ5U/u3i7NwQ==",
+      "BCNk49loEeW720BezYxcf3Q+/oEe9GU+e7libVWq0MJBRLMtFOBqP/+g4GBMuuvXmhh7QFrPIQj4Jy3doGgNi5U=",
+    auth: "VAHFhhLp/R61o1xPCimFzQ==",
   },
 };
 

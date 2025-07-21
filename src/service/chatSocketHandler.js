@@ -428,7 +428,6 @@ const sendNotificationToRecipients = async (
         );
         continue;
       }
-      s;
       const recipientUser = await User.findByPk(recipientId);
 
       if (recipientUser && recipientUser.pushSubscription) {
