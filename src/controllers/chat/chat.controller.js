@@ -324,6 +324,7 @@ export const getUnreadMessagesCount = TryCatchFunction(async (req, res) => {
 export const subscribeToPush = async (req, res) => {
   try {
     const { subscription } = req.body;
+    console.log(subscription);
     const userId = req.user; // From your authorize middleware
 
     console.log("💾 Storing push subscription for user:", userId);
@@ -347,7 +348,7 @@ export const subscribeToPush = async (req, res) => {
     }
 
     const user = await User.findByPk(userId);
-
+    console.log(user);
     await user.update(
       { pushSubscription: subscription }, // Fields to update
       { where: { id: userId } } // Condition to find the user by userId
