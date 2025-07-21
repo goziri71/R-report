@@ -12,8 +12,6 @@ export class ChatService {
       "participants.userId": { $all: [userId, recipientId] },
       status: "active",
     });
-    //   .populate("participants.userId", "name avatar email")
-    //   .populate("lastMessageId");
 
     if (chat) {
       // Update last seen for the requesting user
@@ -67,8 +65,6 @@ export class ChatService {
     });
 
     await chat.save();
-    // await chat.populate("participants.userId", "name avatar email");
-
     return chat;
   }
 
@@ -79,8 +75,11 @@ export class ChatService {
       throw new ErrorClass("Creator not found", 404);
     }
 
-    // Verify all participants exist
-    const participants = await User.find({ _id: { $in: participantIds } });
+    // FIXED: Use Sequelize syntax for User model
+    const participants = await User.findAll({
+      where: { id: participantIds },
+    });
+
     if (participants.length !== participantIds.length) {
       throw new ErrorClass("Some participants not found", 404);
     }
@@ -123,35 +122,8 @@ export class ChatService {
     });
 
     await chat.save();
-    // await chat.populate("participants.userId", "name avatar email");
-
     return chat;
   }
-
-  //   async getUserChats(userId) {
-  //     const chats = await Chat.find({
-  //       "participants.userId": userId,
-  //       "participants.isActive": true,
-  //       status: "active",
-  //       lastMessageId: { $exists: true },
-  //     })
-  //       .sort({ updatedAt: -1 });
-
-  //     return Promise.all(
-  //       chats.map(async (chat) => {
-  //         const participant = chat.participants.find(
-  //           (p) => p.userId.toString() === userId
-  //         );
-  //         const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
-
-  //         return {
-  //           ...chat.toObject(),
-  //           unreadCount: unreadCount,
-  //           lastSeen: participant?.lastSeen,
-  //         };
-  //       })
-  //     );
-  //   }
 
   async getUserChats(userId) {
     const chats = await Chat.find({
@@ -171,24 +143,41 @@ export class ChatService {
         const currentUser = await User.findByPk(userId, {
           attributes: ["id", "firstName", "lastName"],
         });
-        const recipientParticipant = chat.participants.find(
-          (p) => p.userId != userId
-        );
-        const recipientId = recipientParticipant?.userId;
 
-        const recipient = await User.findByPk(recipientId, {
-          attributes: ["id", "firstName", "lastName"],
-        });
+        // FIXED: Handle group chats properly
+        let recipientData = null;
+        if (chat.chatType === "individual") {
+          const recipientParticipant = chat.participants.find(
+            (p) => p.userId.toString() !== userId.toString()
+          );
+          const recipientId = recipientParticipant?.userId;
+
+          if (recipientId) {
+            recipientData = await User.findByPk(recipientId, {
+              attributes: ["id", "firstName", "lastName"],
+            });
+          }
+        }
 
         const chatObj = chat.toObject();
 
-        chatObj.metadata = {
-          ...chatObj.metadata,
-          senderId: currentUser.id,
-          senderName: `${currentUser.firstName} ${currentUser.lastName}`,
-          recipientId: recipient.id,
-          recipientName: `${recipient.firstName} ${recipient.lastName}`,
-        };
+        if (chat.chatType === "individual" && recipientData) {
+          chatObj.metadata = {
+            ...chatObj.metadata,
+            senderId: currentUser.id,
+            senderName: `${currentUser.firstName} ${currentUser.lastName}`,
+            recipientId: recipientData.id,
+            recipientName: `${recipientData.firstName} ${recipientData.lastName}`,
+          };
+        } else {
+          // For group chats, just add sender info
+          chatObj.metadata = {
+            ...chatObj.metadata,
+            senderId: currentUser.id,
+            senderName: `${currentUser.firstName} ${currentUser.lastName}`,
+          };
+        }
+
         chatObj.unreadCount = unreadCount;
         chatObj.lastSeen = participant?.lastSeen;
 
@@ -211,11 +200,6 @@ export class ChatService {
       chatId,
       isDeleted: false,
     })
-      //   .populate("senderId", "name avatar email")
-      //   .populate("replyTo")
-      //   .populate("mentions.userId", "name")
-      //   .populate("reactions.userId", "name")
-      //   .populate("readBy.userId", "name")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -234,6 +218,13 @@ export class ChatService {
     messageType = "text",
     additionalData = {}
   ) {
+    console.log(
+      "📝 Creating message in chat:",
+      chatId,
+      "from sender:",
+      senderId
+    );
+
     // Verify user is participant of the chat
     const chat = await Chat.findOne({
       _id: chatId,
@@ -263,15 +254,16 @@ export class ChatService {
 
     const message = new Message(messageData);
     await message.save();
+    console.log("💾 Message saved with ID:", message._id);
 
-    // Update chat's last message and timestamp
+    // FIXED: Use proper MongoDB syntax for Chat model
     await Chat.findByIdAndUpdate(chatId, {
       lastMessageId: message._id,
       updatedAt: new Date(),
     });
 
     // Increment unread count for all participants except sender
-    await Chat.updateOne(
+    const updateResult = await Chat.updateOne(
       { _id: chatId },
       {
         $inc: {
@@ -283,11 +275,17 @@ export class ChatService {
       }
     );
 
+    console.log("📊 Unread count update result:", updateResult);
+
     return message;
   }
 
   async hasUnseenMessages(chatId, userId) {
     try {
+      console.log(
+        `🔍 Checking unseen messages for user ${userId} in chat ${chatId}`
+      );
+
       // Get user's unread count from the chat participants
       const chat = await Chat.findOne(
         {
@@ -299,16 +297,28 @@ export class ChatService {
         }
       );
 
-      if (!chat || !chat.participants.length) return false;
+      if (!chat || !chat.participants.length) {
+        console.log(`❌ Chat or participant not found`);
+        return false;
+      }
 
       const participant = chat.participants[0];
+      console.log(`👤 Participant data:`, {
+        userId: participant.userId,
+        unreadCount: participant.unreadCount,
+        muted: participant.notificationSettings?.muted,
+      });
 
       // Check if user has muted notifications
       if (participant.notificationSettings?.muted) {
+        console.log(`🔇 User has muted notifications`);
         return false;
       }
+
       // Return true if unread count is greater than 0
-      return participant.unreadCount > 0;
+      const hasUnseen = participant.unreadCount > 0;
+      console.log(`📬 Has unseen messages: ${hasUnseen}`);
+      return hasUnseen;
     } catch (error) {
       console.error("Error checking unseen messages:", error);
       return false;
@@ -316,12 +326,9 @@ export class ChatService {
   }
 
   async getPopulatedMessage(messageId) {
-    return await Message.findById(messageId);
-    //   .populate("senderId", "name avatar email")
-    //   .populate("replyTo")
-    //   .populate("mentions.userId", "name")
-    //   .populate("reactions.userId", "name")
-    //   .populate("readBy.userId", "name");
+    const message = await Message.findById(messageId);
+    console.log("📨 Retrieved message:", message?._id);
+    return message;
   }
 
   async markMessageAsRead(messageId, userId) {
@@ -360,7 +367,7 @@ export class ChatService {
   }
 
   async updateLastSeen(chatId, userId) {
-    await Chat.updateOne(
+    const result = await Chat.updateOne(
       { _id: chatId, "participants.userId": userId },
       {
         $set: {
@@ -368,16 +375,24 @@ export class ChatService {
         },
       }
     );
+    console.log(
+      `⏰ Updated last seen for user ${userId} in chat ${chatId}:`,
+      result
+    );
   }
 
   async resetUnreadCount(chatId, userId) {
-    await Chat.updateOne(
+    const result = await Chat.updateOne(
       { _id: chatId, "participants.userId": userId },
       {
         $set: {
           "participants.$.unreadCount": 0,
         },
       }
+    );
+    console.log(
+      `🔄 Reset unread count for user ${userId} in chat ${chatId}:`,
+      result
     );
   }
 
@@ -515,7 +530,7 @@ export class ChatService {
   }
 
   async updateNotificationSettings(chatId, userId, settings) {
-    await Chat.updateOne(
+    const result = await Chat.updateOne(
       { _id: chatId, "participants.userId": userId },
       {
         $set: {
@@ -523,5 +538,54 @@ export class ChatService {
         },
       }
     );
+    console.log(
+      `🔔 Updated notification settings for user ${userId} in chat ${chatId}:`,
+      result
+    );
+    return result;
+  }
+
+  // NEW: Method to get notification preferences for debugging
+  async getNotificationSettings(chatId, userId) {
+    const chat = await Chat.findOne(
+      { _id: chatId, "participants.userId": userId },
+      { "participants.$": 1 }
+    );
+
+    if (!chat || !chat.participants.length) return null;
+
+    return chat.participants[0].notificationSettings;
+  }
+
+  // NEW: Method to manually trigger unread count check
+  async checkAndFixUnreadCounts(chatId) {
+    console.log(`🔧 Checking unread counts for chat: ${chatId}`);
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) return;
+
+    for (const participant of chat.participants) {
+      if (!participant.isActive) continue;
+
+      const actualUnreadCount = await this.getUnreadMessagesCount(
+        chatId,
+        participant.userId
+      );
+
+      if (participant.unreadCount !== actualUnreadCount) {
+        console.log(
+          `🔄 Fixing unread count for user ${participant.userId}: ${participant.unreadCount} -> ${actualUnreadCount}`
+        );
+
+        await Chat.updateOne(
+          { _id: chatId, "participants.userId": participant.userId },
+          {
+            $set: {
+              "participants.$.unreadCount": actualUnreadCount,
+            },
+          }
+        );
+      }
+    }
   }
 }
