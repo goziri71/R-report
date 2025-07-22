@@ -29,7 +29,7 @@ self.addEventListener("push", (event) => {
     }
 
     const options = {
-      body: data.body,
+      body: "fuck off",
       icon: data.icon || "/icon-192x192.png",
       badge: data.badge || "/badge-72x72.png",
       data: data.data || {},
