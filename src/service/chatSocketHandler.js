@@ -1,5 +1,4 @@
 import Chat from "../models/chat/chat.js";
-import Message from "../models/chat/message.js";
 import { ChatService } from "../service/chat.service.js";
 import webpush from "web-push";
 import { User } from "../models/auth/index.js"; // Make sure this import exists
@@ -194,22 +193,6 @@ export const handleChatSocketEvents = (io) => {
     return online;
   };
 
-  // Helper function to send the last message for a chat
-  const sendLastMessage = async (io, chatId) => {
-    // Fetch the last message of the chat
-    const chat = await Chat.findById(chatId);
-    const lastMessageId = chat?.lastMessageId;
-    const message = await Message.findById(lastMessageId);
-
-    if (message) {
-      io.to(chatId).emit("last_message", {
-        chatId,
-        lastMessage: message.content,
-        timestamp: message.createdAt,
-      });
-    }
-  };
-
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
@@ -230,13 +213,6 @@ export const handleChatSocketEvents = (io) => {
 
       // Send current online users to the newly connected user
       socket.emit("online_users_list", getOnlineUsers());
-
-      // Send last messages for all chats user is part of
-      const userChats = Chat.find({ "participants.userId": userId });
-      userChats.forEach((chat) => {
-        // Send the last message for each chat
-        sendLastMessage(io, chat._id);
-      });
 
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
     });
@@ -322,12 +298,47 @@ export const handleChatSocketEvents = (io) => {
         });
 
         console.log(`User ${userId} joined chat room: ${chatId}`);
-
-        // After user joins, send the last message and unread count
-        sendLastMessage(io, chatId); // Send last message
+        console.log(
+          `Emitting user_online event for user ${userId} to chat ${chatId}`
+        );
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
+      }
+    });
+
+    socket.on("leave_chat", async (data) => {
+      const { chatId } = data;
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        // Leave the socket room
+        socket.leave(chatId);
+
+        // Update last seen before leaving
+        await chatService.updateLastSeen(chatId, userId);
+
+        // Notify other users in the chat that this user is offline
+        socket.to(chatId).emit("user_offline", {
+          userId,
+          chatId,
+          timestamp: new Date().toISOString(),
+        });
+
+        socket.emit("left_chat", {
+          chatId,
+          message: "Successfully left chat",
+        });
+
+        console.log(`User ${userId} left chat room: ${chatId}`);
+      } catch (error) {
+        console.error("Error leaving chat:", error);
+        socket.emit("error", { message: "Failed to leave chat" });
       }
     });
 
@@ -371,7 +382,7 @@ export const handleChatSocketEvents = (io) => {
 
         io.to(chatId).emit("new_message", populatedMessage);
 
-        // Send push notifications
+        // Send push notifications - this is the updated call
         await sendNotificationToRecipients(
           chatId,
           userId,
@@ -379,15 +390,6 @@ export const handleChatSocketEvents = (io) => {
           chatService,
           onlineUsers
         );
-
-        // Update last message in the chat
-        await Chat.findByIdAndUpdate(chatId, {
-          lastMessageId: message._id,
-          updatedAt: new Date(),
-        });
-
-        // Send last message to all users (real-time)
-        sendLastMessage(io, chatId); // Update last message in real-time
 
         socket.emit("message_delivered", {
           messageId: message._id,
@@ -401,6 +403,84 @@ export const handleChatSocketEvents = (io) => {
           error: error.message || "Failed to send message",
           tempId: data.tempId,
         });
+      }
+    });
+
+    socket.on("add_reaction", async (data) => {
+      const { messageId, emoji } = data;
+      const userId = socket.userId;
+
+      try {
+        const message = await chatService.addReaction(messageId, userId, emoji);
+        const populatedMessage = await chatService.getPopulatedMessage(
+          message._id
+        );
+
+        io.to(message.chatId).emit("reaction_added", populatedMessage);
+      } catch (error) {
+        console.error("Error adding reaction:", error);
+        socket.emit("error", { message: "Failed to add reaction" });
+      }
+    });
+
+    socket.on("edit_message", async (data) => {
+      const { messageId, content } = data;
+      const userId = socket.userId;
+
+      try {
+        const message = await chatService.editMessage(
+          messageId,
+          userId,
+          content
+        );
+        const populatedMessage = await chatService.getPopulatedMessage(
+          message._id
+        );
+
+        io.to(message.chatId).emit("message_edited", populatedMessage);
+      } catch (error) {
+        console.error("Error editing message:", error);
+        socket.emit("error", { message: "Failed to edit message" });
+      }
+    });
+
+    socket.on("delete_message", async (data) => {
+      const { messageId } = data;
+      const userId = socket.userId;
+
+      try {
+        const message = await chatService.deleteMessage(messageId, userId);
+
+        io.to(message.chatId).emit("message_deleted", { messageId });
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        socket.emit("error", { message: "Failed to delete message" });
+      }
+    });
+
+    socket.on("typing_start", (data) => {
+      const { chatId } = data;
+      const userId = socket.userId;
+
+      socket.to(chatId).emit("user_typing", { userId, isTyping: true });
+    });
+
+    socket.on("typing_stop", (data) => {
+      const { chatId } = data;
+      const userId = socket.userId;
+
+      socket.to(chatId).emit("user_typing", { userId, isTyping: false });
+    });
+
+    socket.on("mark_message_read", async (data) => {
+      const { messageId, chatId } = data;
+      const userId = socket.userId;
+
+      try {
+        await chatService.markMessageAsRead(messageId, userId);
+        socket.to(chatId).emit("message_read", { messageId, userId });
+      } catch (error) {
+        console.error("Error marking message as read:", error);
       }
     });
 
