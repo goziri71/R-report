@@ -29,7 +29,7 @@ self.addEventListener("push", (event) => {
       icon: data.icon || "/icon-192x192.png",
       badge: data.badge || "/badge-72x72.png",
       data: data.data || {},
-      requireInteraction: true,
+      requireInteraction: false,
       tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
       renotify: true,
       vibrate: [200, 100, 200],
