@@ -76,18 +76,18 @@ const sendNotificationToRecipients = async (
       const recipientId = recipient.userId.toString();
       console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
 
-      const recipientSocketId = userSockets.get(recipientId);
-      const isInChatRoom = recipientSocketId
-        ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
-        : false;
+      // const recipientSocketId = userSockets.get(recipientId);
+      // const isInChatRoom = recipientSocketId
+      //   ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
+      //   : false;
 
-      // If the recipient is in the chat room, skip sending the notification
-      if (isInChatRoom) {
-        console.log(
-          `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
-        );
-        continue;
-      }
+      // // If the recipient is in the chat room, skip sending the notification
+      // if (isInChatRoom) {
+      //   console.log(
+      //     `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
+      //   );
+      //   continue;
+      // }
 
       // Skip the hasUnseenMessages check since it might be blocking notifications
       // The unread count increment happens after message creation, so this check might be premature
