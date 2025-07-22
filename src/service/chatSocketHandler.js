@@ -81,6 +81,7 @@ const sendNotificationToRecipients = async (
         ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
         : false;
 
+      // If the recipient is in the chat room, skip sending the notification
       if (isInChatRoom) {
         console.log(
           `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
@@ -115,8 +116,8 @@ const sendNotificationToRecipients = async (
         const payload = {
           title: senderName,
           body: message.content,
-          icon: "/icon-192x192.png",
-          badge: "/badge-72x72.png",
+          icon: "http://localhost:4000/public/images/",
+          badge: "/images/redbiller.png",
           currentUserId: recipientId,
           data: {
             chatId: chatId,
