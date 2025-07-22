@@ -81,7 +81,6 @@ const sendNotificationToRecipients = async (
       //   ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
       //   : false;
 
-      // // If the recipient is in the chat room, skip sending the notification
       // if (isInChatRoom) {
       //   console.log(
       //     `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
@@ -192,44 +191,6 @@ export const handleChatSocketEvents = (io) => {
       }
     });
     return online;
-  };
-
-  // Unread Message Count: Update unread count for non-online users
-  const updateUnreadCount = async (chatId, recipientId) => {
-    try {
-      const chat = await Chat.findById(chatId);
-      if (!chat) return;
-
-      const participant = chat.participants.find(
-        (p) => p.userId.toString() === recipientId
-      );
-      if (participant) {
-        participant.unreadCount = (participant.unreadCount || 0) + 1;
-        await chat.save();
-      }
-    } catch (error) {
-      console.error("Error updating unread count:", error);
-    }
-  };
-
-  // Send global unread count update when user comes online
-  const sendGlobalUnreadCount = (io, chatId, recipientId) => {
-    io.to(recipientId).emit("update_unread_count", {
-      chatId,
-      unreadCount:
-        (
-          chat.participants.find((p) => p.userId.toString() === recipientId) ||
-          {}
-        ).unreadCount || 0,
-    });
-  };
-
-  // Send last message to all users in the chat globally
-  const sendLastMessage = (io, chatId, lastMessage) => {
-    io.to(chatId).emit("last_message", {
-      chatId,
-      lastMessage,
-    });
   };
 
   io.on("connection", (socket) => {
@@ -429,20 +390,6 @@ export const handleChatSocketEvents = (io) => {
           chatService,
           onlineUsers
         );
-
-        // Update unread count for recipients who are not online
-        const recipients = chat.participants.filter(
-          (p) => p.userId.toString() !== userId
-        );
-        recipients.forEach(async (recipient) => {
-          if (!userSockets.has(recipient.userId.toString())) {
-            await updateUnreadCount(chatId, recipient.userId.toString()); // Update unread count for non-online recipients
-            sendGlobalUnreadCount(io, chatId, recipient.userId.toString()); // Send global unread count
-          }
-        });
-
-        // Emit last message globally
-        sendLastMessage(io, chatId, populatedMessage);
 
         socket.emit("message_delivered", {
           messageId: message._id,
