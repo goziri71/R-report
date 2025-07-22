@@ -28,7 +28,12 @@ const sendPushNotification = async (subscription, payload) => {
 };
 
 // Updated notification function that works with your ChatService
-const sendNotificationToRecipients = async (chatId, senderId, message) => {
+const sendNotificationToRecipients = async (
+  chatId,
+  senderId,
+  message,
+  onlineUsers
+) => {
   try {
     console.log("🔔 === NOTIFICATION DEBUG START ===");
     console.log("Chat ID:", chatId);
@@ -71,17 +76,17 @@ const sendNotificationToRecipients = async (chatId, senderId, message) => {
       const recipientId = recipient.userId.toString();
       console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
 
-      // const recipientSocketId = userSockets.get(recipientId);
-      // const isInChatRoom = recipientSocketId
-      //   ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
-      //   : false;
+      const recipientSocketId = userSockets.get(recipientId);
+      const isInChatRoom = recipientSocketId
+        ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
+        : false;
 
-      // if (isInChatRoom) {
-      //   console.log(
-      //     `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
-      //   );
-      //   continue;
-      // }
+      if (isInChatRoom) {
+        console.log(
+          `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
+        );
+        continue;
+      }
 
       // Skip the hasUnseenMessages check since it might be blocking notifications
       // The unread count increment happens after message creation, so this check might be premature
@@ -382,7 +387,8 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           userId,
           populatedMessage,
-          chatService
+          chatService,
+          onlineUsers
         );
 
         socket.emit("message_delivered", {
