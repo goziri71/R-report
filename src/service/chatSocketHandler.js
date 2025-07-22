@@ -27,7 +27,7 @@ const sendPushNotification = async (subscription, payload) => {
   }
 };
 
-// Updated notification function
+// Updated notification function that works with your ChatService
 const sendNotificationToRecipients = async (
   chatId,
   senderId,
@@ -35,27 +35,62 @@ const sendNotificationToRecipients = async (
   chatService
 ) => {
   try {
-    // FIXED: Changed from Chat.findByPk to Chat.findById (MongoDB syntax)
+    console.log("🔔 === NOTIFICATION DEBUG START ===");
+    console.log("Chat ID:", chatId);
+    console.log("Sender ID:", senderId);
+
+    // Get chat participants (excluding sender)
     const chat = await Chat.findById(chatId);
-    if (!chat) return;
+    if (!chat) {
+      console.log("❌ Chat not found:", chatId);
+      return;
+    }
 
     // Get sender details for notification
     const sender = await User.findByPk(senderId, {
       attributes: ["id", "firstName", "lastName"],
     });
 
+    if (!sender) {
+      console.log("❌ Sender not found:", senderId);
+      return;
+    }
+
     const senderName = `${sender.firstName} ${sender.lastName}`;
+    console.log("✅ Sender found:", senderName);
 
     const recipients = chat.participants.filter(
       (participant) =>
         participant.userId.toString() !== senderId && participant.isActive
     );
 
+    console.log("📬 Recipients found:", recipients.length);
+
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
+      console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
+
+      // Skip the hasUnseenMessages check since it might be blocking notifications
+      // The unread count increment happens after message creation, so this check might be premature
 
       // Get recipient user data including push subscription
       const recipientUser = await User.findByPk(recipientId);
+
+      if (!recipientUser) {
+        console.log(`❌ Recipient user not found: ${recipientId}`);
+        continue;
+      }
+
+      console.log(
+        `📱 Has push subscription: ${!!recipientUser.pushSubscription}`
+      );
+
+      // Check if notifications are muted directly from the chat participant
+      const participantSettings = recipient.notificationSettings;
+      if (participantSettings?.muted) {
+        console.log(`🔇 Notifications muted for user: ${recipientId}`);
+        continue;
+      }
 
       if (recipientUser && recipientUser.pushSubscription) {
         // Send push notification
@@ -72,34 +107,74 @@ const sendNotificationToRecipients = async (
           },
         };
 
+        console.log(`📤 Sending push notification to ${recipientId}:`, payload);
+
         const result = await sendPushNotification(
           recipientUser.pushSubscription,
           payload
         );
 
         if (result === "invalid_subscription") {
-          // FIXED: Changed from User.findByIdAndUpdate to User.update (Sequelize syntax)
+          // Remove invalid subscription
           await User.update(
             { pushSubscription: null },
             { where: { id: recipientId } }
           );
           console.log(
-            `Removed invalid push subscription for user: ${recipientId}`
+            `🗑️ Removed invalid push subscription for user: ${recipientId}`
           );
         } else if (result) {
-          console.log(`Push notification sent to user: ${recipientId}`);
+          console.log(
+            `✅ Push notification sent successfully to user: ${recipientId}`
+          );
+        } else {
+          console.log(
+            `❌ Failed to send push notification to user: ${recipientId}`
+          );
         }
       } else {
-        console.log(`No push subscription found for user: ${recipientId}`);
+        console.log(`📵 No push subscription found for user: ${recipientId}`);
       }
     }
+
+    console.log("🔔 === NOTIFICATION DEBUG END ===\n");
   } catch (error) {
-    console.error("Error sending notifications:", error);
+    console.error("💥 Error sending notifications:", error);
   }
 };
 
 export const handleChatSocketEvents = (io) => {
   const userSockets = new Map();
+  const onlineUsers = new Map(); // userId -> { socketId, status, lastSeen }
+
+  // Helper function to broadcast user status to all connected users
+  const broadcastUserStatus = (userId, status) => {
+    const timestamp = new Date().toISOString();
+
+    // Broadcast to all connected users
+    io.emit("user_global_status", {
+      userId,
+      status, // 'online', 'offline', 'away', 'busy'
+      timestamp,
+    });
+
+    console.log(`Broadcasting global status: User ${userId} is ${status}`);
+  };
+
+  // Helper function to get all online users
+  const getOnlineUsers = () => {
+    const online = [];
+    onlineUsers.forEach((data, userId) => {
+      if (data.status === "online") {
+        online.push({
+          userId,
+          status: data.status,
+          lastSeen: data.lastSeen,
+        });
+      }
+    });
+    return online;
+  };
 
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
@@ -108,7 +183,64 @@ export const handleChatSocketEvents = (io) => {
       const { userId } = userData;
       socket.userId = userId;
       userSockets.set(userId, socket.id);
+
+      // Set user as online
+      onlineUsers.set(userId, {
+        socketId: socket.id,
+        status: "online",
+        lastSeen: new Date(),
+      });
+
+      // Broadcast that user is online
+      broadcastUserStatus(userId, "online");
+
+      // Send current online users to the newly connected user
+      socket.emit("online_users_list", getOnlineUsers());
+
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
+    });
+
+    // Event: Get online users
+    socket.on("get_online_users", () => {
+      socket.emit("online_users_list", getOnlineUsers());
+    });
+
+    // Event: Check if specific user is online
+    socket.on("check_user_status", (data) => {
+      const { userId: targetUserId } = data;
+      const userStatus = onlineUsers.get(targetUserId);
+
+      socket.emit("user_status_response", {
+        userId: targetUserId,
+        isOnline: !!userStatus && userStatus.status === "online",
+        status: userStatus ? userStatus.status : "offline",
+        lastSeen: userStatus ? userStatus.lastSeen : null,
+      });
+    });
+
+    // Event: Update user status (online, away, busy, etc.)
+    socket.on("update_status", (data) => {
+      const { status } = data; // 'online', 'away', 'busy', 'do_not_disturb'
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      // Update user status
+      if (onlineUsers.has(userId)) {
+        onlineUsers.get(userId).status = status;
+        onlineUsers.get(userId).lastSeen = new Date();
+      }
+
+      // Broadcast status change
+      broadcastUserStatus(userId, status);
+
+      socket.emit("status_updated", {
+        status,
+        timestamp: new Date().toISOString(),
+      });
     });
 
     socket.on("join_chat", async (data) => {
@@ -337,18 +469,29 @@ export const handleChatSocketEvents = (io) => {
     socket.on("disconnect", () => {
       const userId = socket.userId;
 
-      const rooms = Array.from(socket.rooms).filter(
-        (room) => room !== socket.id
-      );
+      if (userId) {
+        // Remove from tracking maps
+        userSockets.delete(userId);
+        onlineUsers.delete(userId);
 
-      // Notify each chat room that the user is offline
-      rooms.forEach((chatId) => {
-        socket.to(chatId).emit("user_offline", {
-          userId,
-          chatId,
-          timestamp: new Date().toISOString(),
+        // Broadcast that user is offline globally
+        broadcastUserStatus(userId, "offline");
+
+        // Handle chat-specific offline notifications
+        const rooms = Array.from(socket.rooms).filter(
+          (room) => room !== socket.id
+        );
+
+        rooms.forEach((chatId) => {
+          socket.to(chatId).emit("user_offline", {
+            userId,
+            chatId,
+            timestamp: new Date().toISOString(),
+          });
         });
-      });
+
+        console.log(`User ${userId} disconnected from socket ${socket.id}`);
+      }
 
       console.log("User disconnected:", socket.id);
     });
