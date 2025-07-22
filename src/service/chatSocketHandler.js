@@ -76,13 +76,14 @@ const sendNotificationToRecipients = async (
       const recipientId = recipient.userId.toString();
       console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
 
-      const isRecipientOnline =
-        onlineUsers.has(recipientId) &&
-        onlineUsers.get(recipientId).status === "online";
+      const recipientSocketId = userSockets.get(recipientId);
+      const isInChatRoom = recipientSocketId
+        ? io.sockets.sockets.get(recipientSocketId)?.rooms?.has(chatId)
+        : false;
 
-      if (isRecipientOnline) {
+      if (isInChatRoom) {
         console.log(
-          `⏭️ Skipping notification - recipient ${recipientId} is online`
+          `⏭️ Skipping notification - recipient ${recipientId} is in chat room ${chatId}`
         );
         continue;
       }
