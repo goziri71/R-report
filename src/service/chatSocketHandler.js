@@ -196,7 +196,7 @@ export const handleChatSocketEvents = (io) => {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    socket.on("authenticate", (userData) => {
+    socket.on("authenticate", async (userData) => {
       const { userId } = userData;
       socket.userId = userId;
       userSockets.set(userId, socket.id);
@@ -213,6 +213,27 @@ export const handleChatSocketEvents = (io) => {
 
       // Send current online users to the newly connected user
       socket.emit("online_users_list", getOnlineUsers());
+
+      // Fetch last message and unread message count for the chats the user is part of
+      const chats = await Chat.find({
+        "participants.userId": userId,
+        "participants.isActive": true,
+      });
+
+      // Emit the last message and unread count for each chat
+      chats.forEach((chat) => {
+        const participant = chat.participants.find(
+          (p) => p.userId.toString() === userId
+        );
+
+        if (participant) {
+          socket.emit("chat_details", {
+            chatId: chat._id,
+            lastMessage: chat.lastMessage,
+            unreadCount: participant.unreadMessages || 0,
+          });
+        }
+      });
 
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
     });
