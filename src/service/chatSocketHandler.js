@@ -99,7 +99,7 @@ const sendNotificationToRecipients = async (
           body: message.content,
           icon: "/icon-192x192.png",
           badge: "/badge-72x72.png",
-          currentUserId: recipientId,
+          currentUserId: senderId,
           data: {
             chatId: chatId,
             messageId: message._id,
