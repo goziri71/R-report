@@ -32,7 +32,7 @@ const sendNotificationToRecipients = async (
   chatId,
   senderId,
   message,
-  chatService
+  onlineUsers
 ) => {
   try {
     console.log("🔔 === NOTIFICATION DEBUG START ===");
@@ -60,8 +60,14 @@ const sendNotificationToRecipients = async (
     console.log("✅ Sender found:", senderName);
 
     const recipients = chat.participants.filter(
-      (participant) =>
-        participant.userId.toString() !== senderId && participant.isActive
+      // (participant) =>
+      //   participant.userId.toString() !== senderId && participant.isActive
+      (participant) => {
+        const participantUserId = participant.userId.toString();
+        const senderUserId = senderId.toString();
+
+        return participantUserId !== senderUserId && participant.isActive;
+      }
     );
 
     console.log("📬 Recipients found:", recipients.length);
@@ -69,6 +75,17 @@ const sendNotificationToRecipients = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
       console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
+
+      const isRecipientOnline =
+        onlineUsers.has(recipientId) &&
+        onlineUsers.get(recipientId).status === "online";
+
+      if (isRecipientOnline) {
+        console.log(
+          `⏭️ Skipping notification - recipient ${recipientId} is online`
+        );
+        continue;
+      }
 
       // Skip the hasUnseenMessages check since it might be blocking notifications
       // The unread count increment happens after message creation, so this check might be premature
@@ -107,8 +124,6 @@ const sendNotificationToRecipients = async (
             url: `/chat/${chatId}`,
           },
         };
-
-        console.log(`📤 Sending push notification to ${recipientId}:`, payload);
 
         const result = await sendPushNotification(
           recipientUser.pushSubscription,
@@ -371,7 +386,8 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           userId,
           populatedMessage,
-          chatService
+          chatService,
+          onlineUsers
         );
 
         socket.emit("message_delivered", {
