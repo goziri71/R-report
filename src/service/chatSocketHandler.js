@@ -115,7 +115,7 @@ const sendNotificationToRecipients = async (
         const payload = {
           title: senderName,
           body: message.content,
-          icon: "http://localhost:4000/public/images/",
+          icon: "/images/redbiller.png",
           badge: "/images/redbiller.png",
           currentUserId: recipientId,
           data: {

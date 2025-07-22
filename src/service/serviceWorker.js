@@ -26,8 +26,8 @@ self.addEventListener("push", (event) => {
 
     const options = {
       body: data.body,
-      icon: data.icon || "/icon-192x192.png",
-      badge: data.badge || "/badge-72x72.png",
+      icon: data.icon || "/images/redbiller.png",
+      badge: data.badge || "/images/redbiller.png",
       data: data.data || {},
       requireInteraction: true,
       tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
@@ -53,6 +53,9 @@ self.addEventListener("push", (event) => {
         .showNotification(data.title, options)
         .then(() => {
           console.log("🎉 Notification displayed successfully!");
+          setTimeout(() => {
+            event.notification.close();
+          }, 5000);
         })
         .catch((error) => {
           console.error("❌ Error displaying notification:", error);
