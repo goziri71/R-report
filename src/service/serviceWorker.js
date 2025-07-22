@@ -24,12 +24,8 @@ self.addEventListener("push", (event) => {
       return;
     }
 
-    if (data.senderId === data.currentUserId) {
-      return; // Don't send notification to sender
-    }
-
     const options = {
-      body: "fuck off",
+      body: data.body,
       icon: data.icon || "/icon-192x192.png",
       badge: data.badge || "/badge-72x72.png",
       data: data.data || {},
