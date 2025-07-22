@@ -198,25 +198,65 @@ self.addEventListener("push", (event) => {
       return;
     }
 
+    // const options = {
+    //   body: data.body,
+    //   icon: data.icon || "/icon-192x192.png",
+    //   badge: data.badge || "/badge-72x72.png",
+    //   data: data.data || {},
+    //   requireInteraction: true,
+    //   tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
+    //   renotify: true,
+    //   vibrate: [200, 100, 200],
+    //   actions: [
+    //     {
+    //       action: "open",
+    //       title: "Open Chat",
+    //     },
+    //     {
+    //       action: "close",
+    //       title: "Close",
+    //     },
+    //   ],
+    // };
+
     const options = {
       body: data.body,
       icon: data.icon || "/icon-192x192.png",
-      badge: data.badge || "/badge-72x72.png",
+      badge: data.badge || "/badge-72x72.png", // Small monochrome icon (Android)
+
+      // This is about as "colorful" as you can get
+      image: data.image, // Large image preview (Android only)
+
       data: data.data || {},
-      requireInteraction: true,
+      requireInteraction: data.urgent || false,
       tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
       renotify: true,
-      vibrate: [200, 100, 200],
+
+      // Vibration is your main "personality" tool
+      vibrate: data.urgent
+        ? [200, 100, 200, 100, 300] // Urgent pattern
+        : [100, 50, 100], // Normal pattern
+
       actions: [
         {
           action: "open",
-          title: "Open Chat",
+          title: "💬 Open Chat", // Emojis are your friend for color!
+          icon: "/icons/chat.png", // Small action icons
         },
         {
-          action: "close",
-          title: "Close",
+          action: "reply",
+          title: "⚡ Quick Reply",
+          icon: "/icons/reply.png",
+        },
+        {
+          action: "dismiss",
+          title: "❌ Dismiss",
+          icon: "/icons/close.png",
         },
       ],
+
+      timestamp: Date.now(),
+      silent: data.silent || false,
     };
 
     console.log("📝 Notification options prepared:", options);
