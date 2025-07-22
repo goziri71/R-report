@@ -28,12 +28,7 @@ const sendPushNotification = async (subscription, payload) => {
 };
 
 // Updated notification function that works with your ChatService
-const sendNotificationToRecipients = async (
-  chatId,
-  senderId,
-  message,
-  onlineUsers
-) => {
+const sendNotificationToRecipients = async (chatId, senderId, message) => {
   try {
     console.log("🔔 === NOTIFICATION DEBUG START ===");
     console.log("Chat ID:", chatId);
@@ -387,8 +382,7 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           userId,
           populatedMessage,
-          chatService,
-          onlineUsers
+          chatService
         );
 
         socket.emit("message_delivered", {
