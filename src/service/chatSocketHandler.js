@@ -216,6 +216,48 @@ export const handleChatSocketEvents = (io) => {
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
     });
 
+    socket.on("get_last_message", async (chatId) => {
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      // Check if the user is already in the chat room
+      const isInChatRoom = socket.rooms.has(chatId); // Check if the user is in the chat room
+
+      if (isInChatRoom) {
+        console.log(
+          `User ${userId} is already in chat room ${chatId}, skipping last message fetch.`
+        );
+        return; // Skip fetching last message if the user is in the room
+      }
+
+      try {
+        // Fetch the chat document from the database
+        const chat = await Chat.findById(chatId).populate(
+          "participants.userId",
+          "firstName lastName"
+        );
+
+        if (!chat) {
+          socket.emit("error", { message: "Chat not found" });
+          return;
+        }
+
+        // Get the last message from the chat
+        const lastMessage = chat.messages[chat.messages.length - 1]; // Get the last message
+
+        // Send the last message to the user who requested it
+        socket.emit("last_message", lastMessage);
+        console.log(`Last message sent to user ${userId} for chat ${chatId}`);
+      } catch (error) {
+        console.error("Error fetching last message:", error);
+        socket.emit("error", { message: "Failed to fetch last message" });
+      }
+    });
+
     // Event: Get online users
     socket.on("get_online_users", () => {
       socket.emit("online_users_list", getOnlineUsers());
