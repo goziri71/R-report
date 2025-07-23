@@ -29,7 +29,7 @@ self.addEventListener("push", (event) => {
       icon: data.icon || "/images/redbiller.png",
       badge: data.badge || "/images/redbiller.png",
       data: data.data || {},
-      requireInteraction: true,
+      requireInteraction: false,
       tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
       renotify: true,
       vibrate: [200, 100, 200],
@@ -54,7 +54,16 @@ self.addEventListener("push", (event) => {
         .then(() => {
           console.log("🎉 Notification displayed successfully!");
           setTimeout(() => {
-            event.notification.close();
+            self.registration
+              .getNotifications({
+                tag: options.tag,
+              })
+              .then((notifications) => {
+                notifications.forEach((notification) => {
+                  console.log("🔄 Auto-closing notification");
+                  notification.close();
+                });
+              });
           }, 5000);
         })
         .catch((error) => {
@@ -63,7 +72,7 @@ self.addEventListener("push", (event) => {
           // Try showing a basic notification as fallback
           return self.registration.showNotification("New Message", {
             body: "You have a new message",
-            icon: "/icon-192x192.png",
+            icon: "/images/redbiller.png",
           });
         })
     );
@@ -83,7 +92,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification("New Message", {
         body: "You have a new message (parsing failed)",
-        icon: "/icon-192x192.png",
+        icon: "/images/redbiller.png",
       })
     );
   }

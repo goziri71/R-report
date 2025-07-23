@@ -32,6 +32,7 @@ app.use(
       "http://localhost:5174",
       "http://localhost:5173",
       "https://redbiller-work-neon.vercel.app",
+      "https://main.d5ival0pckjqv.amplifyapp.com/",
     ],
     credentials: true,
   })
