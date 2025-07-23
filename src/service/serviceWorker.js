@@ -228,8 +228,10 @@ self.addEventListener("push", (event) => {
       icon: data.icon || "/images/redbiller.png",
       badge: data.badge || "/images/redbiller.png",
       data: data.data || {},
-      requireInteraction: false, // Key: this allows auto-dismiss
+      requireInteraction: false,
       tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
+      renotify: true,
+      vibrate: [200, 100, 200],
       // Remove actions to allow browser's native auto-dismiss behavior
       // actions: [...],
     };
