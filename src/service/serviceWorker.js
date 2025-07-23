@@ -53,18 +53,31 @@ self.addEventListener("push", (event) => {
         .showNotification(data.title, options)
         .then(() => {
           console.log("🎉 Notification displayed successfully!");
-          setTimeout(() => {
-            self.registration
-              .getNotifications({
-                tag: options.tag,
-              })
-              .then((notifications) => {
-                notifications.forEach((notification) => {
-                  console.log("🔄 Auto-closing notification");
-                  notification.close();
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              console.log(
+                "⏰ 5 seconds passed, attempting to close notification"
+              );
+              self.registration
+                .getNotifications({
+                  tag: options.tag,
+                })
+                .then((notifications) => {
+                  console.log(
+                    `🔍 Found ${notifications.length} notifications to close`
+                  );
+                  notifications.forEach((notification) => {
+                    console.log("🔄 Auto-closing notification");
+                    notification.close();
+                  });
+                  resolve();
+                })
+                .catch((error) => {
+                  console.error("❌ Error closing notifications:", error);
+                  resolve();
                 });
-              });
-          }, 5000);
+            }, 5000);
+          });
         })
         .catch((error) => {
           console.error("❌ Error displaying notification:", error);
