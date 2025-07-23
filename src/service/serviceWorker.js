@@ -205,9 +205,6 @@
 //   self.skipWaiting();
 // });
 
-// At the top of your service worker, add a Map to store notifications
-const activeNotifications = new Map();
-
 self.addEventListener("push", (event) => {
   console.log("Push event received:", event);
 
@@ -225,29 +222,16 @@ self.addEventListener("push", (event) => {
       return;
     }
 
-    const notificationTag = data.data?.chatId
-      ? `chat-${data.data.chatId}`
-      : "default";
-
+    // Simplified options - let browser handle auto-dismiss
     const options = {
       body: data.body,
       icon: data.icon || "/images/redbiller.png",
       badge: data.badge || "/images/redbiller.png",
       data: data.data || {},
-      requireInteraction: false,
-      tag: notificationTag,
-      renotify: true,
-      vibrate: [200, 100, 200],
-      actions: [
-        {
-          action: "open",
-          title: "Open Chat",
-        },
-        {
-          action: "close",
-          title: "Close",
-        },
-      ],
+      requireInteraction: false, // Key: this allows auto-dismiss
+      tag: data.data?.chatId ? `chat-${data.data.chatId}` : "default",
+      // Remove actions to allow browser's native auto-dismiss behavior
+      // actions: [...],
     };
 
     console.log("📝 Notification options prepared:", options);
@@ -256,80 +240,15 @@ self.addEventListener("push", (event) => {
       self.registration
         .showNotification(data.title, options)
         .then(() => {
-          console.log("🎉 Notification displayed successfully!");
-
-          // Store the notification info
-          activeNotifications.set(notificationTag, {
-            timestamp: Date.now(),
-            tag: notificationTag,
-          });
-
-          // Set up auto-close
-          setTimeout(() => {
-            console.log(
-              "⏰ Attempting to auto-close notification after 5 seconds"
-            );
-
-            // Method 1: Try to get and close notifications by tag
-            self.registration
-              .getNotifications({ tag: notificationTag })
-              .then((notifications) => {
-                console.log(
-                  `🔍 Found ${notifications.length} notifications with tag: ${notificationTag}`
-                );
-                notifications.forEach((notification) => {
-                  console.log("🔄 Closing notification:", notification);
-                  notification.close();
-                });
-
-                // Clean up our tracking
-                activeNotifications.delete(notificationTag);
-              })
-              .catch((error) => {
-                console.error("❌ Error getting notifications:", error);
-
-                // Method 2: Try to get all notifications and filter
-                return self.registration.getNotifications();
-              })
-              .then((allNotifications) => {
-                if (allNotifications) {
-                  console.log(
-                    `🔍 Found ${allNotifications.length} total notifications`
-                  );
-                  allNotifications.forEach((notification) => {
-                    if (notification.tag === notificationTag) {
-                      console.log(
-                        "🔄 Closing notification by tag match:",
-                        notification
-                      );
-                      notification.close();
-                    }
-                  });
-                }
-              })
-              .catch((error) => {
-                console.error("❌ Error closing notifications:", error);
-              });
-          }, 5000);
+          console.log(
+            "🎉 Notification displayed - browser should auto-dismiss"
+          );
         })
         .catch((error) => {
           console.error("❌ Error displaying notification:", error);
-          return self.registration.showNotification("New Message", {
-            body: "You have a new message",
-            icon: "/images/redbiller.png",
-            requireInteraction: false,
-          });
         })
     );
   } catch (error) {
     console.error("❌ Error parsing push data:", error);
-    event.waitUntil(
-      self.registration.showNotification("New Message", {
-        body: "You have a new message (parsing failed)",
-        icon: "/images/redbiller.png",
-        requireInteraction: false,
-      })
-    );
   }
 });
-u;
