@@ -755,47 +755,59 @@ export const handleChatSocketEvents = (io) => {
 
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
 
-      // NEW: Automatically send last messages for all user's chats
-      try {
-        const userChats = await chatService.getUserChats(userId);
-        console.log(
-          `📨 Sending last messages for ${userChats.length} chats to user ${userId}`
-        );
+      // FIXED: Send last messages using the correct data structure
+      setTimeout(async () => {
+        try {
+          const userChats = await chatService.getUserChats(userId);
+          console.log(`📨 Found ${userChats.length} chats for user ${userId}`);
 
-        for (const chat of userChats) {
-          const chatId = chat._id.toString();
-          const isInChatRoom = socket.rooms.has(chatId);
+          for (const chat of userChats) {
+            const chatId = chat._id.toString();
+            const isInChatRoom = socket.rooms.has(chatId);
 
-          // Only send if user is NOT in the chat room AND chat has messages
-          if (!isInChatRoom && chat.lastMessageId) {
-            // Get the full chat with messages
-            const fullChat = await Chat.findById(chat._id);
-            if (fullChat && fullChat.messages && fullChat.messages.length > 0) {
-              const lastMessage =
-                fullChat.messages[fullChat.messages.length - 1];
+            console.log(
+              `Chat ${chatId}: inRoom=${isInChatRoom}, hasLastMessage=${!!chat.lastMessageId}`
+            );
 
-              // Send last message with chat info
-              socket.emit("last_message", {
-                chatId: chatId,
-                message: lastMessage,
-                unreadCount: chat.unreadCount || 0,
-                chatType: chat.chatType,
-                chatName: chat.metadata?.name || "Unknown Chat",
-                recipientName: chat.metadata?.recipientName || null,
-              });
+            // Only send if user is NOT in the chat room AND chat has a last message
+            if (!isInChatRoom && chat.lastMessageId) {
+              try {
+                // Get the actual last message from Message collection
+                const lastMessage = await chatService.getPopulatedMessage(
+                  chat.lastMessageId
+                );
 
-              console.log(
-                `📤 Sent last message for chat ${chatId} to user ${userId}`
-              );
+                if (lastMessage) {
+                  socket.emit("last_message", {
+                    chatId: chatId,
+                    message: lastMessage,
+                    unreadCount: chat.unreadCount || 0,
+                    chatType: chat.chatType,
+                    chatName: chat.metadata?.name || "Unknown Chat",
+                    recipientName: chat.metadata?.recipientName || null,
+                  });
+
+                  console.log(
+                    `✅ Sent last message for chat ${chatId} to user ${userId}`
+                  );
+                } else {
+                  console.log(`❌ No last message found for chat ${chatId}`);
+                }
+              } catch (messageError) {
+                console.error(
+                  `Error getting message for chat ${chatId}:`,
+                  messageError
+                );
+              }
             }
           }
+        } catch (error) {
+          console.error("Error sending initial last messages:", error);
         }
-      } catch (error) {
-        console.error("Error sending initial last messages:", error);
-      }
+      }, 500); // Increased delay to ensure socket is ready
     });
 
-    // Updated get_last_message - now works for individual chat requests
+    // FIXED: Updated get_last_message event
     socket.on("get_last_message", async (chatId) => {
       const userId = socket.userId;
 
@@ -803,6 +815,10 @@ export const handleChatSocketEvents = (io) => {
         socket.emit("error", { message: "User not authenticated" });
         return;
       }
+
+      console.log(
+        `🔍 get_last_message requested for chat ${chatId} by user ${userId}`
+      );
 
       // Only fetch if user is NOT in the chat room
       const isInChatRoom = socket.rooms.has(chatId);
@@ -819,13 +835,13 @@ export const handleChatSocketEvents = (io) => {
         const chatData = userChats.find((c) => c._id.toString() === chatId);
 
         if (!chatData) {
+          console.log(`❌ Chat ${chatId} not found for user ${userId}`);
           socket.emit("error", { message: "Chat not found or access denied" });
           return;
         }
 
-        // Get the full chat with messages
-        const fullChat = await Chat.findById(chatId);
-        if (!fullChat || !fullChat.messages || fullChat.messages.length === 0) {
+        if (!chatData.lastMessageId) {
+          console.log(`❌ No last message ID for chat ${chatId}`);
           socket.emit("last_message", {
             chatId,
             message: null,
@@ -837,7 +853,25 @@ export const handleChatSocketEvents = (io) => {
           return;
         }
 
-        const lastMessage = fullChat.messages[fullChat.messages.length - 1];
+        // Get the actual last message
+        const lastMessage = await chatService.getPopulatedMessage(
+          chatData.lastMessageId
+        );
+
+        if (!lastMessage) {
+          console.log(
+            `❌ Last message not found for ID ${chatData.lastMessageId}`
+          );
+          socket.emit("last_message", {
+            chatId,
+            message: null,
+            unreadCount: 0,
+            chatType: chatData.chatType,
+            chatName: chatData.metadata?.name || "Unknown Chat",
+            recipientName: chatData.metadata?.recipientName || null,
+          });
+          return;
+        }
 
         socket.emit("last_message", {
           chatId,
@@ -849,7 +883,7 @@ export const handleChatSocketEvents = (io) => {
         });
 
         console.log(
-          `📤 Last message sent to user ${userId} for chat ${chatId}`
+          `✅ Last message sent to user ${userId} for chat ${chatId}`
         );
       } catch (error) {
         console.error("Error fetching last message:", error);
@@ -1030,7 +1064,7 @@ export const handleChatSocketEvents = (io) => {
           onlineUsers
         );
 
-        // NEW: Send last_message update to users NOT in the chat room
+        // FIXED: Send last_message update to users NOT in the chat room
         try {
           const chat = await Chat.findById(chatId);
           if (chat) {
