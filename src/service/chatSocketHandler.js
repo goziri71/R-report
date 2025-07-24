@@ -560,7 +560,7 @@
 import Chat from "../models/chat/chat.js";
 import { ChatService } from "../service/chat.service.js";
 import webpush from "web-push";
-import { User } from "../models/auth/index.js"; // Make sure this import exists
+import { User } from "../models/auth/index.js";
 
 const chatService = new ChatService();
 
@@ -578,7 +578,6 @@ const sendPushNotification = async (subscription, payload) => {
     return true;
   } catch (error) {
     console.error("Push notification error:", error);
-    // If subscription is invalid (410), it should be removed from database
     if (error.statusCode === 410) {
       return "invalid_subscription";
     }
@@ -598,14 +597,12 @@ const sendNotificationToRecipients = async (
     console.log("Chat ID:", chatId);
     console.log("Sender ID:", senderId);
 
-    // Get chat participants (excluding sender)
     const chat = await Chat.findById(chatId);
     if (!chat) {
       console.log("❌ Chat not found:", chatId);
       return;
     }
 
-    // Get sender details for notification
     const sender = await User.findByPk(senderId, {
       attributes: ["id", "firstName", "lastName"],
     });
@@ -621,7 +618,6 @@ const sendNotificationToRecipients = async (
     const recipients = chat.participants.filter((participant) => {
       const participantUserId = participant.userId.toString();
       const senderUserId = senderId.toString();
-
       return participantUserId !== senderUserId && participant.isActive;
     });
 
@@ -631,7 +627,6 @@ const sendNotificationToRecipients = async (
       const recipientId = recipient.userId.toString();
       console.log(`\n🔍 === Processing recipient: ${recipientId} ===`);
 
-      // Get recipient user data including push subscription
       const recipientUser = await User.findByPk(recipientId);
 
       if (!recipientUser) {
@@ -643,7 +638,6 @@ const sendNotificationToRecipients = async (
         `📱 Has push subscription: ${!!recipientUser.pushSubscription}`
       );
 
-      // Check if notifications are muted directly from the chat participant
       const participantSettings = recipient.notificationSettings;
       if (participantSettings?.muted) {
         console.log(`🔇 Notifications muted for user: ${recipientId}`);
@@ -651,7 +645,6 @@ const sendNotificationToRecipients = async (
       }
 
       if (recipientUser && recipientUser.pushSubscription) {
-        // Send push notification
         const payload = {
           title: senderName,
           body: message.content,
@@ -672,7 +665,6 @@ const sendNotificationToRecipients = async (
         );
 
         if (result === "invalid_subscription") {
-          // Remove invalid subscription
           await User.update(
             { pushSubscription: null },
             { where: { id: recipientId } }
@@ -700,25 +692,80 @@ const sendNotificationToRecipients = async (
   }
 };
 
+// NEW: Helper function to send last_message updates to users not in chat room
+const sendLastMessageUpdate = async (
+  io,
+  userSockets,
+  chatId,
+  excludeUserId = null
+) => {
+  try {
+    const chat = await Chat.findById(chatId);
+    if (!chat || !chat.lastMessageId) return;
+
+    const lastMessage = await chatService.getPopulatedMessage(
+      chat.lastMessageId
+    );
+    if (!lastMessage) return;
+
+    // Get all participants except the excluded user (usually the sender)
+    const recipients = chat.participants.filter(
+      (participant) =>
+        participant.isActive &&
+        (!excludeUserId ||
+          participant.userId.toString() !== excludeUserId.toString())
+    );
+
+    for (const recipient of recipients) {
+      const recipientId = recipient.userId.toString();
+      const recipientSocketId = userSockets.get(recipientId);
+
+      if (recipientSocketId) {
+        const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+        const isInChatRoom = recipientSocket?.rooms?.has(chatId);
+
+        // Only send to users NOT in the chat room
+        if (!isInChatRoom && recipientSocket) {
+          // Get updated chat data with unread count
+          const userChats = await chatService.getUserChats(recipientId);
+          const chatData = userChats.find((c) => c._id.toString() === chatId);
+
+          if (chatData) {
+            recipientSocket.emit("last_message", {
+              chatId: chatId,
+              message: lastMessage,
+              unreadCount: chatData.unreadCount || 0,
+              chatType: chatData.chatType,
+              chatName: chatData.metadata?.name || "Unknown Chat",
+              recipientName: chatData.metadata?.recipientName || null,
+            });
+
+            console.log(
+              `🔄 Sent last_message update to user ${recipientId} for chat ${chatId}`
+            );
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error sending last_message update:", error);
+  }
+};
+
 export const handleChatSocketEvents = (io) => {
   const userSockets = new Map();
-  const onlineUsers = new Map(); // userId -> { socketId, status, lastSeen }
+  const onlineUsers = new Map();
 
-  // Helper function to broadcast user status to all connected users
   const broadcastUserStatus = (userId, status) => {
     const timestamp = new Date().toISOString();
-
-    // Broadcast to all connected users
     io.emit("user_global_status", {
       userId,
-      status, // 'online', 'offline', 'away', 'busy'
+      status,
       timestamp,
     });
-
     console.log(`Broadcasting global status: User ${userId} is ${status}`);
   };
 
-  // Helper function to get all online users
   const getOnlineUsers = () => {
     const online = [];
     onlineUsers.forEach((data, userId) => {
@@ -741,21 +788,18 @@ export const handleChatSocketEvents = (io) => {
       socket.userId = userId;
       userSockets.set(userId, socket.id);
 
-      // Set user as online
       onlineUsers.set(userId, {
         socketId: socket.id,
         status: "online",
         lastSeen: new Date(),
       });
 
-      // Broadcast that user is online
       broadcastUserStatus(userId, "online");
-      // Send current online users to the newly connected user
       socket.emit("online_users_list", getOnlineUsers());
 
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
 
-      // FIXED: Send last messages using the correct data structure
+      // Send initial last messages
       setTimeout(async () => {
         try {
           const userChats = await chatService.getUserChats(userId);
@@ -769,10 +813,8 @@ export const handleChatSocketEvents = (io) => {
               `Chat ${chatId}: inRoom=${isInChatRoom}, hasLastMessage=${!!chat.lastMessageId}`
             );
 
-            // Only send if user is NOT in the chat room AND chat has a last message
             if (!isInChatRoom && chat.lastMessageId) {
               try {
-                // Get the actual last message from Message collection
                 const lastMessage = await chatService.getPopulatedMessage(
                   chat.lastMessageId
                 );
@@ -804,10 +846,9 @@ export const handleChatSocketEvents = (io) => {
         } catch (error) {
           console.error("Error sending initial last messages:", error);
         }
-      }, 500); // Increased delay to ensure socket is ready
+      }, 500);
     });
 
-    // FIXED: Updated get_last_message event
     socket.on("get_last_message", async (chatId) => {
       const userId = socket.userId;
 
@@ -820,7 +861,6 @@ export const handleChatSocketEvents = (io) => {
         `🔍 get_last_message requested for chat ${chatId} by user ${userId}`
       );
 
-      // Only fetch if user is NOT in the chat room
       const isInChatRoom = socket.rooms.has(chatId);
       if (isInChatRoom) {
         console.log(
@@ -830,7 +870,6 @@ export const handleChatSocketEvents = (io) => {
       }
 
       try {
-        // Get the chat with user's participation info
         const userChats = await chatService.getUserChats(userId);
         const chatData = userChats.find((c) => c._id.toString() === chatId);
 
@@ -853,7 +892,6 @@ export const handleChatSocketEvents = (io) => {
           return;
         }
 
-        // Get the actual last message
         const lastMessage = await chatService.getPopulatedMessage(
           chatData.lastMessageId
         );
@@ -891,12 +929,10 @@ export const handleChatSocketEvents = (io) => {
       }
     });
 
-    // Event: Get online users
     socket.on("get_online_users", () => {
       socket.emit("online_users_list", getOnlineUsers());
     });
 
-    // Event: Check if specific user is online
     socket.on("check_user_status", (data) => {
       const { userId: targetUserId } = data;
       const userStatus = onlineUsers.get(targetUserId);
@@ -909,9 +945,8 @@ export const handleChatSocketEvents = (io) => {
       });
     });
 
-    // Event: Update user status (online, away, busy, etc.)
     socket.on("update_status", (data) => {
-      const { status } = data; // 'online', 'away', 'busy', 'do_not_disturb'
+      const { status } = data;
       const userId = socket.userId;
 
       if (!userId) {
@@ -919,13 +954,11 @@ export const handleChatSocketEvents = (io) => {
         return;
       }
 
-      // Update user status
       if (onlineUsers.has(userId)) {
         onlineUsers.get(userId).status = status;
         onlineUsers.get(userId).lastSeen = new Date();
       }
 
-      // Broadcast status change
       broadcastUserStatus(userId, status);
 
       socket.emit("status_updated", {
@@ -957,8 +990,9 @@ export const handleChatSocketEvents = (io) => {
 
         socket.join(chatId);
 
-        // Update last seen
+        // Update last seen and reset unread count
         await chatService.updateLastSeen(chatId, userId);
+        await chatService.resetUnreadCount(chatId, userId);
 
         socket.emit("joined_chat", {
           chatId,
@@ -971,10 +1005,10 @@ export const handleChatSocketEvents = (io) => {
           timestamp: new Date().toISOString(),
         });
 
+        // NEW: Send updated last_message to other users not in this chat
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
+
         console.log(`User ${userId} joined chat room: ${chatId}`);
-        console.log(
-          `Emitting user_online event for user ${userId} to chat ${chatId}`
-        );
       } catch (error) {
         console.error("Error joining chat:", error);
         socket.emit("error", { message: "Failed to join chat" });
@@ -991,13 +1025,10 @@ export const handleChatSocketEvents = (io) => {
       }
 
       try {
-        // Leave the socket room
         socket.leave(chatId);
 
-        // Update last seen before leaving
         await chatService.updateLastSeen(chatId, userId);
 
-        // Notify other users in the chat that this user is offline
         socket.to(chatId).emit("user_offline", {
           userId,
           chatId,
@@ -1008,6 +1039,11 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           message: "Successfully left chat",
         });
+
+        // NEW: Send updated last_message to this user since they left the chat
+        setTimeout(async () => {
+          await sendLastMessageUpdate(io, userSockets, chatId);
+        }, 100);
 
         console.log(`User ${userId} left chat room: ${chatId}`);
       } catch (error) {
@@ -1056,7 +1092,6 @@ export const handleChatSocketEvents = (io) => {
 
         io.to(chatId).emit("new_message", populatedMessage);
 
-        // Send push notifications - this is the updated call
         await sendNotificationToRecipients(
           chatId,
           userId,
@@ -1064,55 +1099,8 @@ export const handleChatSocketEvents = (io) => {
           onlineUsers
         );
 
-        // FIXED: Send last_message update to users NOT in the chat room
-        try {
-          const chat = await Chat.findById(chatId);
-          if (chat) {
-            // Get all participants except the sender
-            const recipients = chat.participants.filter(
-              (participant) =>
-                participant.userId.toString() !== userId.toString() &&
-                participant.isActive
-            );
-
-            for (const recipient of recipients) {
-              const recipientId = recipient.userId.toString();
-              const recipientSocketId = userSockets.get(recipientId);
-
-              if (recipientSocketId) {
-                const recipientSocket =
-                  io.sockets.sockets.get(recipientSocketId);
-                const isInChatRoom = recipientSocket?.rooms?.has(chatId);
-
-                // Only send to users NOT in the chat room
-                if (!isInChatRoom) {
-                  // Get updated chat data with unread count
-                  const userChats = await chatService.getUserChats(recipientId);
-                  const chatData = userChats.find(
-                    (c) => c._id.toString() === chatId
-                  );
-
-                  if (chatData && recipientSocket) {
-                    recipientSocket.emit("last_message", {
-                      chatId: chatId,
-                      message: populatedMessage,
-                      unreadCount: chatData.unreadCount || 0,
-                      chatType: chatData.chatType,
-                      chatName: chatData.metadata?.name || "Unknown Chat",
-                      recipientName: chatData.metadata?.recipientName || null,
-                    });
-
-                    console.log(
-                      `📤 Sent last_message update to user ${recipientId} for chat ${chatId}`
-                    );
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error sending last_message updates:", error);
-        }
+        // NEW: Send last_message update to users NOT in the chat room
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
 
         socket.emit("message_delivered", {
           messageId: message._id,
@@ -1140,6 +1128,16 @@ export const handleChatSocketEvents = (io) => {
         );
 
         io.to(message.chatId).emit("reaction_added", populatedMessage);
+
+        // NEW: Update last_message if this was the last message
+        const chat = await Chat.findById(message.chatId);
+        if (
+          chat &&
+          chat.lastMessageId &&
+          chat.lastMessageId.toString() === messageId
+        ) {
+          await sendLastMessageUpdate(io, userSockets, message.chatId, userId);
+        }
       } catch (error) {
         console.error("Error adding reaction:", error);
         socket.emit("error", { message: "Failed to add reaction" });
@@ -1161,6 +1159,16 @@ export const handleChatSocketEvents = (io) => {
         );
 
         io.to(message.chatId).emit("message_edited", populatedMessage);
+
+        // NEW: Update last_message if this was the last message
+        const chat = await Chat.findById(message.chatId);
+        if (
+          chat &&
+          chat.lastMessageId &&
+          chat.lastMessageId.toString() === messageId
+        ) {
+          await sendLastMessageUpdate(io, userSockets, message.chatId, userId);
+        }
       } catch (error) {
         console.error("Error editing message:", error);
         socket.emit("error", { message: "Failed to edit message" });
@@ -1175,6 +1183,16 @@ export const handleChatSocketEvents = (io) => {
         const message = await chatService.deleteMessage(messageId, userId);
 
         io.to(message.chatId).emit("message_deleted", { messageId });
+
+        // NEW: Update last_message if this was the last message
+        const chat = await Chat.findById(message.chatId);
+        if (
+          chat &&
+          chat.lastMessageId &&
+          chat.lastMessageId.toString() === messageId
+        ) {
+          await sendLastMessageUpdate(io, userSockets, message.chatId, userId);
+        }
       } catch (error) {
         console.error("Error deleting message:", error);
         socket.emit("error", { message: "Failed to delete message" });
@@ -1202,6 +1220,9 @@ export const handleChatSocketEvents = (io) => {
       try {
         await chatService.markMessageAsRead(messageId, userId);
         socket.to(chatId).emit("message_read", { messageId, userId });
+
+        // NEW: Send updated last_message to users not in chat (unread count changed)
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
       } catch (error) {
         console.error("Error marking message as read:", error);
       }
@@ -1211,14 +1232,11 @@ export const handleChatSocketEvents = (io) => {
       const userId = socket.userId;
 
       if (userId) {
-        // Remove from tracking maps
         userSockets.delete(userId);
         onlineUsers.delete(userId);
 
-        // Broadcast that user is offline globally
         broadcastUserStatus(userId, "offline");
 
-        // Handle chat-specific offline notifications
         const rooms = Array.from(socket.rooms).filter(
           (room) => room !== socket.id
         );
