@@ -254,12 +254,12 @@ const sendNotificationToRecipients = async (
           icon: "/images/redbiller.png",
           badge: "/images/redbiller.png",
           currentUserId: recipientId,
-          unreadCount,
           data: {
             chatId: chatId,
             messageId: message._id,
             senderId: senderId,
             url: `/chat/${chatId}`,
+            unreadCount: unreadCount,
           },
         };
 
