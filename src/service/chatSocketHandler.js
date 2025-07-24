@@ -259,7 +259,6 @@ const sendNotificationToRecipients = async (
             messageId: message._id,
             senderId: senderId,
             url: `/chat/${chatId}`,
-            unreadCount: unreadCount,
           },
         };
 
