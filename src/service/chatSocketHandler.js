@@ -247,6 +247,10 @@ const sendNotificationToRecipients = async (
         continue;
       }
 
+      const unreadCount = await chatService.getUnreadMessagesCount(
+        chatId,
+        recipientId
+      );
       if (recipientUser && recipientUser.pushSubscription) {
         const payload = {
           title: senderName,
@@ -258,6 +262,7 @@ const sendNotificationToRecipients = async (
             chatId: chatId,
             messageId: message._id,
             senderId: senderId,
+            unreadCount: unreadCount,
             url: `/chat/${chatId}`,
           },
         };
