@@ -160,403 +160,6 @@
 //   }
 // };
 
-// export const handleChatSocketEvents = (io) => {
-//   const userSockets = new Map();
-//   const onlineUsers = new Map(); // userId -> { socketId, status, lastSeen }
-
-//   // Helper function to broadcast user status to all connected users
-//   const broadcastUserStatus = (userId, status) => {
-//     const timestamp = new Date().toISOString();
-
-//     // Broadcast to all connected users
-//     io.emit("user_global_status", {
-//       userId,
-//       status, // 'online', 'offline', 'away', 'busy'
-//       timestamp,
-//     });
-
-//     console.log(`Broadcasting global status: User ${userId} is ${status}`);
-//   };
-
-//   // Helper function to get all online users
-//   const getOnlineUsers = () => {
-//     const online = [];
-//     onlineUsers.forEach((data, userId) => {
-//       if (data.status === "online") {
-//         online.push({
-//           userId,
-//           status: data.status,
-//           lastSeen: data.lastSeen,
-//         });
-//       }
-//     });
-//     return online;
-//   };
-
-//   io.on("connection", (socket) => {
-//     console.log("User connected:", socket.id);
-
-//     socket.on("authenticate", (userData) => {
-//       const { userId } = userData;
-//       socket.userId = userId;
-//       userSockets.set(userId, socket.id);
-
-//       // Set user as online
-//       onlineUsers.set(userId, {
-//         socketId: socket.id,
-//         status: "online",
-//         lastSeen: new Date(),
-//       });
-
-//       // Broadcast that user is online
-//       broadcastUserStatus(userId, "online");
-//       // Send current online users to the newly connected user
-//       socket.emit("online_users_list", getOnlineUsers());
-
-//       console.log(`User ${userId} authenticated with socket ${socket.id}`);
-//     });
-
-//     socket.on("get_last_message", async (chatId) => {
-//       const userId = socket.userId;
-
-//       if (!userId) {
-//         socket.emit("error", { message: "User not authenticated" });
-//         return;
-//       }
-
-//       // Check if the user is already in the chat room
-//       const isInChatRoom = socket.rooms.has(chatId); // Check if the user is in the chat room
-
-//       if (isInChatRoom) {
-//         console.log(
-//           `User ${userId} is already in chat room ${chatId}, skipping last message fetch.`
-//         );
-//         return; // Skip fetching last message if the user is in the room
-//       }
-
-//       try {
-//         // Fetch the chat document from the database
-//         const chat = await Chat.findById(chatId).populate(
-//           "participants.userId",
-//           "firstName lastName"
-//         );
-
-//         if (!chat) {
-//           socket.emit("error", { message: "Chat not found" });
-//           return;
-//         }
-
-//         // Get the last message from the chat
-//         const lastMessage = chat.messages[chat.messages.length - 1]; // Get the last message
-
-//         // Send the last message to the user who requested it
-//         socket.emit("last_message", lastMessage);
-//         console.log(`Last message sent to user ${userId} for chat ${chatId}`);
-//       } catch (error) {
-//         console.error("Error fetching last message:", error);
-//         socket.emit("error", { message: "Failed to fetch last message" });
-//       }
-//     });
-
-//     // Event: Get online users
-//     socket.on("get_online_users", () => {
-//       socket.emit("online_users_list", getOnlineUsers());
-//     });
-
-//     // Event: Check if specific user is online
-//     socket.on("check_user_status", (data) => {
-//       const { userId: targetUserId } = data;
-//       const userStatus = onlineUsers.get(targetUserId);
-
-//       socket.emit("user_status_response", {
-//         userId: targetUserId,
-//         isOnline: !!userStatus && userStatus.status === "online",
-//         status: userStatus ? userStatus.status : "offline",
-//         lastSeen: userStatus ? userStatus.lastSeen : null,
-//       });
-//     });
-
-//     // Event: Update user status (online, away, busy, etc.)
-//     socket.on("update_status", (data) => {
-//       const { status } = data; // 'online', 'away', 'busy', 'do_not_disturb'
-//       const userId = socket.userId;
-
-//       if (!userId) {
-//         socket.emit("error", { message: "User not authenticated" });
-//         return;
-//       }
-
-//       // Update user status
-//       if (onlineUsers.has(userId)) {
-//         onlineUsers.get(userId).status = status;
-//         onlineUsers.get(userId).lastSeen = new Date();
-//       }
-
-//       // Broadcast status change
-//       broadcastUserStatus(userId, status);
-
-//       socket.emit("status_updated", {
-//         status,
-//         timestamp: new Date().toISOString(),
-//       });
-//     });
-
-//     socket.on("join_chat", async (data) => {
-//       const { chatId } = data;
-//       const userId = socket.userId;
-
-//       if (!userId) {
-//         socket.emit("error", { message: "User not authenticated" });
-//         return;
-//       }
-
-//       try {
-//         const chat = await Chat.findOne({
-//           _id: chatId,
-//           "participants.userId": userId,
-//           "participants.isActive": true,
-//         });
-
-//         if (!chat) {
-//           socket.emit("error", { message: "Chat not found or access denied" });
-//           return;
-//         }
-
-//         socket.join(chatId);
-
-//         // Update last seen
-//         await chatService.updateLastSeen(chatId, userId);
-
-//         socket.emit("joined_chat", {
-//           chatId,
-//           message: "Successfully joined chat",
-//         });
-
-//         socket.to(chatId).emit("user_online", {
-//           userId,
-//           chatId,
-//           timestamp: new Date().toISOString(),
-//         });
-
-//         console.log(`User ${userId} joined chat room: ${chatId}`);
-//         console.log(
-//           `Emitting user_online event for user ${userId} to chat ${chatId}`
-//         );
-//       } catch (error) {
-//         console.error("Error joining chat:", error);
-//         socket.emit("error", { message: "Failed to join chat" });
-//       }
-//     });
-
-//     socket.on("leave_chat", async (data) => {
-//       const { chatId } = data;
-//       const userId = socket.userId;
-
-//       if (!userId) {
-//         socket.emit("error", { message: "User not authenticated" });
-//         return;
-//       }
-
-//       try {
-//         // Leave the socket room
-//         socket.leave(chatId);
-
-//         // Update last seen before leaving
-//         await chatService.updateLastSeen(chatId, userId);
-
-//         // Notify other users in the chat that this user is offline
-//         socket.to(chatId).emit("user_offline", {
-//           userId,
-//           chatId,
-//           timestamp: new Date().toISOString(),
-//         });
-
-//         socket.emit("left_chat", {
-//           chatId,
-//           message: "Successfully left chat",
-//         });
-
-//         console.log(`User ${userId} left chat room: ${chatId}`);
-//       } catch (error) {
-//         console.error("Error leaving chat:", error);
-//         socket.emit("error", { message: "Failed to leave chat" });
-//       }
-//     });
-
-//     socket.on("send_message", async (data) => {
-//       const {
-//         chatId,
-//         content,
-//         messageType = "text",
-//         replyTo,
-//         fileData,
-//         mentions,
-//       } = data;
-//       const userId = socket.userId;
-
-//       if (!userId) {
-//         socket.emit("error", { message: "User not authenticated" });
-//         return;
-//       }
-
-//       if (!content || !content.trim()) {
-//         socket.emit("error", { message: "Message content is required" });
-//         return;
-//       }
-
-//       try {
-//         const additionalData = {};
-//         if (replyTo) additionalData.replyTo = replyTo;
-//         if (fileData) additionalData.fileData = fileData;
-//         if (mentions) additionalData.mentions = mentions;
-
-//         const message = await chatService.createMessage(
-//           chatId,
-//           userId,
-//           content,
-//           messageType,
-//           additionalData
-//         );
-//         const populatedMessage = await chatService.getPopulatedMessage(
-//           message._id
-//         );
-
-//         io.to(chatId).emit("new_message", populatedMessage);
-
-//         // Send push notifications - this is the updated call
-//         await sendNotificationToRecipients(
-//           chatId,
-//           userId,
-//           populatedMessage,
-//           chatService,
-//           onlineUsers
-//         );
-
-//         socket.emit("message_delivered", {
-//           messageId: message._id,
-//           tempId: data.tempId,
-//         });
-
-//         console.log(`Message sent to chat ${chatId}:`, content);
-//       } catch (error) {
-//         console.error("Error sending message:", error);
-//         socket.emit("message_error", {
-//           error: error.message || "Failed to send message",
-//           tempId: data.tempId,
-//         });
-//       }
-//     });
-
-//     socket.on("add_reaction", async (data) => {
-//       const { messageId, emoji } = data;
-//       const userId = socket.userId;
-
-//       try {
-//         const message = await chatService.addReaction(messageId, userId, emoji);
-//         const populatedMessage = await chatService.getPopulatedMessage(
-//           message._id
-//         );
-
-//         io.to(message.chatId).emit("reaction_added", populatedMessage);
-//       } catch (error) {
-//         console.error("Error adding reaction:", error);
-//         socket.emit("error", { message: "Failed to add reaction" });
-//       }
-//     });
-
-//     socket.on("edit_message", async (data) => {
-//       const { messageId, content } = data;
-//       const userId = socket.userId;
-
-//       try {
-//         const message = await chatService.editMessage(
-//           messageId,
-//           userId,
-//           content
-//         );
-//         const populatedMessage = await chatService.getPopulatedMessage(
-//           message._id
-//         );
-
-//         io.to(message.chatId).emit("message_edited", populatedMessage);
-//       } catch (error) {
-//         console.error("Error editing message:", error);
-//         socket.emit("error", { message: "Failed to edit message" });
-//       }
-//     });
-
-//     socket.on("delete_message", async (data) => {
-//       const { messageId } = data;
-//       const userId = socket.userId;
-
-//       try {
-//         const message = await chatService.deleteMessage(messageId, userId);
-
-//         io.to(message.chatId).emit("message_deleted", { messageId });
-//       } catch (error) {
-//         console.error("Error deleting message:", error);
-//         socket.emit("error", { message: "Failed to delete message" });
-//       }
-//     });
-
-//     socket.on("typing_start", (data) => {
-//       const { chatId } = data;
-//       const userId = socket.userId;
-
-//       socket.to(chatId).emit("user_typing", { userId, isTyping: true });
-//     });
-
-//     socket.on("typing_stop", (data) => {
-//       const { chatId } = data;
-//       const userId = socket.userId;
-
-//       socket.to(chatId).emit("user_typing", { userId, isTyping: false });
-//     });
-
-//     socket.on("mark_message_read", async (data) => {
-//       const { messageId, chatId } = data;
-//       const userId = socket.userId;
-
-//       try {
-//         await chatService.markMessageAsRead(messageId, userId);
-//         socket.to(chatId).emit("message_read", { messageId, userId });
-//       } catch (error) {
-//         console.error("Error marking message as read:", error);
-//       }
-//     });
-
-//     socket.on("disconnect", () => {
-//       const userId = socket.userId;
-
-//       if (userId) {
-//         // Remove from tracking maps
-//         userSockets.delete(userId);
-//         onlineUsers.delete(userId);
-
-//         // Broadcast that user is offline globally
-//         broadcastUserStatus(userId, "offline");
-
-//         // Handle chat-specific offline notifications
-//         const rooms = Array.from(socket.rooms).filter(
-//           (room) => room !== socket.id
-//         );
-
-//         rooms.forEach((chatId) => {
-//           socket.to(chatId).emit("user_offline", {
-//             userId,
-//             chatId,
-//             timestamp: new Date().toISOString(),
-//           });
-//         });
-
-//         console.log(`User ${userId} disconnected from socket ${socket.id}`);
-//       }
-
-//       console.log("User disconnected:", socket.id);
-//     });
-//   });
-// };
-
 import Chat from "../models/chat/chat.js";
 import { ChatService } from "../service/chat.service.js";
 import webpush from "web-push";
@@ -719,32 +322,42 @@ const sendLastMessageUpdate = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
       const recipientSocketId = userSockets.get(recipientId);
+      const recipientSocket = recipientSocketId
+        ? io.sockets.sockets.get(recipientSocketId)
+        : null;
+      const isInChatRoom = recipientSocket?.rooms?.has(chatId);
 
-      if (recipientSocketId) {
-        const recipientSocket = io.sockets.sockets.get(recipientSocketId);
-        const isInChatRoom = recipientSocket?.rooms?.has(chatId);
+      console.log(
+        `[last_message debug] recipientId=${recipientId}, socketId=${recipientSocketId}, isInChatRoom=${isInChatRoom}, rooms=${
+          recipientSocket ? Array.from(recipientSocket.rooms).join(",") : "N/A"
+        }`
+      );
 
-        // Only send to users NOT in the chat room
-        if (!isInChatRoom && recipientSocket) {
-          // Get updated chat data with unread count
-          const userChats = await chatService.getUserChats(recipientId);
-          const chatData = userChats.find((c) => c._id.toString() === chatId);
+      if (!isInChatRoom && recipientSocket) {
+        // Get updated chat data with unread count
+        const userChats = await chatService.getUserChats(recipientId);
+        const chatData = userChats.find((c) => c._id.toString() === chatId);
 
-          if (chatData) {
-            recipientSocket.emit("last_message", {
-              chatId: chatId,
-              message: lastMessage,
-              unreadCount: chatData.unreadCount || 0,
-              chatType: chatData.chatType,
-              chatName: chatData.metadata?.name || "Unknown Chat",
-              recipientName: chatData.metadata?.recipientName || null,
-            });
+        if (chatData) {
+          recipientSocket.emit("last_message", {
+            chatId: chatId,
+            message: lastMessage,
+            unreadCount: chatData.unreadCount || 0,
+            chatType: chatData.chatType,
+            chatName: chatData.metadata?.name || "Unknown Chat",
+            recipientName: chatData.metadata?.recipientName || null,
+          });
 
-            console.log(
-              `🔄 Sent last_message update to user ${recipientId} for chat ${chatId}`
-            );
-          }
+          console.log(
+            `🔄 Sent last_message update to user ${recipientId} for chat ${chatId}`
+          );
         }
+      } else {
+        console.log(
+          `[last_message debug] Skipped user ${recipientId}: ${
+            !recipientSocket ? "No socket" : "In chat room"
+          }`
+        );
       }
     }
   } catch (error) {
