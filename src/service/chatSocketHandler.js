@@ -247,14 +247,15 @@ const sendNotificationToRecipients = async (
         continue;
       }
 
-      const unreadCount = await chatService.getUnreadMessagesCount(
-        chatId,
-        recipientId
-      );
       if (recipientUser && recipientUser.pushSubscription) {
+        const unreadCount = await chatService.getUnreadMessagesCount(
+          chatId,
+          recipientId
+        );
         const payload = {
           title: senderName,
           body: message.content,
+          unreadCount: unreadCount,
           icon: "/images/redbiller.png",
           badge: "/images/redbiller.png",
           currentUserId: recipientId,
@@ -262,7 +263,6 @@ const sendNotificationToRecipients = async (
             chatId: chatId,
             messageId: message._id,
             senderId: senderId,
-            unreadCount: unreadCount,
             url: `/chat/${chatId}`,
           },
         };
