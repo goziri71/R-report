@@ -257,10 +257,19 @@ export class ChatService {
     console.log("💾 Message saved with ID:", message._id);
 
     // FIXED: Use proper MongoDB syntax for Chat model
-    await Chat.findByIdAndUpdate(chatId, {
-      lastMessageId: message._id,
-      updatedAt: new Date(),
-    });
+    // await Chat.findByIdAndUpdate(chatId, {
+    //   lastMessageId: message._id,
+    //   updatedAt: new Date(),
+    // });
+
+    await Chat.findByIdAndUpdate(
+      chatId,
+      {
+        lastMessageId: message._id,
+        updatedAt: new Date(),
+      },
+      { new: true } // Optional: returns the updated document
+    );
 
     // Increment unread count for all participants except sender
     const updateResult = await Chat.updateOne(

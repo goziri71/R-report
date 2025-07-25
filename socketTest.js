@@ -3,7 +3,7 @@ import { io } from "socket.io-client";
 // === CONFIGURATION ===
 const SERVER_URL = "https://r-report-v1.onrender.com"; // Change to your backend URL/port
 const USER_ID = "34"; // Use user ID 6
-const CHAT_ID = "686e902e776cb0e814940d8b"; // Replace with a real chat ID
+// const CHAT_ID = "686e902e776cb0e814940d8b"; // Replace with a real chat ID
 
 const socket = io(SERVER_URL, {
   transports: ["websocket", "polling"],
@@ -42,14 +42,14 @@ socket.on("user_global_status", (data) => {
 
 // Join a chat after 2 seconds
 setTimeout(() => {
-  socket.emit("join_chat", { chatId: CHAT_ID });
-  console.log("➡️ join_chat emitted for", CHAT_ID);
+  socket.emit("join_chat", { chatId: "686e902e776cb0e814940d8b" });
+  console.log("➡️ join_chat emitted for", "686e902e776cb0e814940d8b");
 }, 2000);
 
 // Leave the chat after 10 seconds
 setTimeout(() => {
-  socket.emit("leave_chat", { chatId: CHAT_ID });
-  console.log("⬅️ leave_chat emitted for", CHAT_ID);
+  socket.emit("leave_chat", { chatId: "686e902e776cb0e814940d8b" });
+  console.log("⬅️ leave_chat emitted for", "686e902e776cb0e814940d8b");
 }, 10000);
 
 // Keep the process alive
