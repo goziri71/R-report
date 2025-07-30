@@ -28,6 +28,18 @@ socket.on("new_message", (data) => {
   console.log("🟢 new_message event received:", data);
 });
 
+// Subscribe to real-time last message updates
+socket.on("last_message_update", (data) => {
+  console.log("🔄 Real-time last_message_update received:", data);
+  // updateChatList(data); // Uncomment when you have this function
+});
+
+// Subscribe to real-time updates after authentication
+socket.on("authenticated", () => {
+  console.log("🔔 Subscribing to real-time last messages");
+  socket.emit("subscribe_to_last_messages");
+});
+
 socket.on("message_delivered", (data) => {
   console.log("🟢 message_delivered event received:", data);
 });
@@ -50,7 +62,7 @@ setTimeout(() => {
 setTimeout(() => {
   socket.emit("leave_chat", { chatId: "686e902e776cb0e814940d8b" });
   console.log("⬅️ leave_chat emitted for", "686e902e776cb0e814940d8b");
-}, 10000);
+}, 50000);
 
 // Keep the process alive
 setInterval(() => {}, 1000);

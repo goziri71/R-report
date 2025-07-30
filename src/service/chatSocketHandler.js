@@ -254,6 +254,7 @@ export const handleChatSocketEvents = (io) => {
 
       broadcastUserStatus(userId, "online");
       socket.emit("online_users_list", getOnlineUsers());
+      socket.emit("authenticated", { userId });
 
       console.log(`User ${userId} authenticated with socket ${socket.id}`);
 
@@ -768,12 +769,12 @@ export const handleChatSocketEvents = (io) => {
         const messageContent = `🎤 Voice Note (${Math.round(duration || 0)}s)`;
         const additionalData = {
           fileData: {
-            type: "voice_note",
-            filePath: fileName,
-            publicUrl: urlData.publicUrl,
+            filename: fileName,
+            size: audioBuffer.length,
+            mimeType: "audio/webm",
+            url: urlData.publicUrl,
             duration: duration || 0,
             timestamp: timestamp,
-            fileSize: audioBuffer.length,
           },
         };
 
@@ -781,7 +782,7 @@ export const handleChatSocketEvents = (io) => {
           chatId,
           userId,
           messageContent,
-          "voice_note",
+          "voice", // Use 'voice' instead of 'voice_note' to match your model
           additionalData
         );
 
@@ -796,8 +797,8 @@ export const handleChatSocketEvents = (io) => {
         socket.emit("voice_note_delivered", {
           messageId: message._id,
           tempId: data.tempId,
-          filePath: fileName,
-          publicUrl: urlData.publicUrl,
+          filename: fileName,
+          url: urlData.publicUrl,
         });
 
         // NEW: Update last_message for users not in chat room
