@@ -247,7 +247,6 @@ export class ChatService {
 
         chatObj.unreadCount = unreadCount;
         chatObj.lastSeen = participant?.lastSeen;
-        console.log(chatObj);
 
         return {
           ...chatObj,
