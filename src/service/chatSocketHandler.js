@@ -2,6 +2,7 @@ import Chat from "../models/chat/chat.js";
 import { ChatService } from "../service/chat.service.js";
 import webpush from "web-push";
 import { User } from "../models/auth/index.js";
+import storageClient from "../supabase/index.js";
 
 const chatService = new ChatService();
 
@@ -182,7 +183,8 @@ const sendLastMessageUpdate = async (
         const chatData = userChats.find((c) => c._id.toString() === chatId);
 
         if (chatData) {
-          recipientSocket.emit("last_message", {
+          // Send real-time last message update
+          recipientSocket.emit("last_message_update", {
             chatId: chatId,
             message: lastMessage,
             unreadCount: chatData.unreadCount || 0,
@@ -192,7 +194,7 @@ const sendLastMessageUpdate = async (
           });
 
           console.log(
-            `🔄 Sent last_message update to user ${recipientId} for chat ${chatId}`
+            `🔄 Sent real-time last_message_update to user ${recipientId} for chat ${chatId}`
           );
         }
       } else {
@@ -305,6 +307,44 @@ export const handleChatSocketEvents = (io) => {
       }, 500);
     });
 
+    // Real-time last message updates (no manual request needed)
+    socket.on("subscribe_to_last_messages", async () => {
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      console.log(`🔔 User ${userId} subscribed to real-time last messages`);
+
+      // Send initial last messages for all chats
+      try {
+        const userChats = await chatService.getUserChats(userId);
+
+        for (const chat of userChats) {
+          if (chat.lastMessageId) {
+            const lastMessage = await chatService.getPopulatedMessage(
+              chat.lastMessageId
+            );
+            if (lastMessage) {
+              socket.emit("last_message_update", {
+                chatId: chat._id.toString(),
+                message: lastMessage,
+                unreadCount: chat.unreadCount || 0,
+                chatType: chat.chatType,
+                chatName: chat.metadata?.name || "Unknown Chat",
+                recipientName: chat.metadata?.recipientName || null,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error sending initial last messages:", error);
+      }
+    });
+
+    // Keep the old get_last_message for backward compatibility
     socket.on("get_last_message", async (chatId) => {
       const userId = socket.userId;
 
@@ -681,6 +721,97 @@ export const handleChatSocketEvents = (io) => {
         await sendLastMessageUpdate(io, userSockets, chatId, userId);
       } catch (error) {
         console.error("Error marking message as read:", error);
+      }
+    });
+
+    // Voice note socket events
+    socket.on("send_voice_note", async (data) => {
+      const { chatId, audioData, duration } = data;
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        // Convert base64 to buffer
+        const audioBuffer = Buffer.from(audioData, "base64");
+
+        // Generate unique filename for this chat and user
+        const timestamp = Date.now();
+        const fileName = `chat_${chatId}/user_${userId}/${timestamp}_voice.webm`;
+
+        // Upload to your existing Supabase bucket
+        const { data: uploadData, error } = await storageClient
+          .from("voice-notes") // Use your existing bucket or create 'voice-notes' bucket
+          .upload(fileName, audioBuffer, {
+            contentType: "audio/webm",
+            metadata: {
+              chatId,
+              userId,
+              duration: duration || 0,
+              timestamp,
+            },
+          });
+
+        if (error) {
+          throw new Error(`Upload failed: ${error.message}`);
+        }
+
+        // Get the public URL
+        const { data: urlData } = storageClient
+          .from("voice-notes")
+          .getPublicUrl(fileName);
+
+        // Create message with voice note data
+        const messageContent = `🎤 Voice Note (${Math.round(duration || 0)}s)`;
+        const additionalData = {
+          fileData: {
+            type: "voice_note",
+            filePath: fileName,
+            publicUrl: urlData.publicUrl,
+            duration: duration || 0,
+            timestamp: timestamp,
+            fileSize: audioBuffer.length,
+          },
+        };
+
+        const message = await chatService.createMessage(
+          chatId,
+          userId,
+          messageContent,
+          "voice_note",
+          additionalData
+        );
+
+        const populatedMessage = await chatService.getPopulatedMessage(
+          message._id
+        );
+
+        // Broadcast to chat room
+        io.to(chatId).emit("new_message", populatedMessage);
+
+        // Send delivery confirmation
+        socket.emit("voice_note_delivered", {
+          messageId: message._id,
+          tempId: data.tempId,
+          filePath: fileName,
+          publicUrl: urlData.publicUrl,
+        });
+
+        // NEW: Update last_message for users not in chat room
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
+
+        console.log(
+          `🎤 Voice note uploaded to chat ${chatId} by user ${userId}`
+        );
+      } catch (error) {
+        console.error("Error sending voice note:", error);
+        socket.emit("voice_note_error", {
+          error: error.message || "Failed to send voice note",
+          tempId: data.tempId,
+        });
       }
     });
 
