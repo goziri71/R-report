@@ -175,8 +175,30 @@ const sendLastMessageUpdate = async (
 
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
-      console.log("this is zee checking for this" + recipientId);
+
+      // Debug: Check the exact types and values
+      console.log(
+        `🔍 [last_message debug] recipient.userId type: ${typeof recipient.userId}, value: ${
+          recipient.userId
+        }`
+      );
+      console.log(
+        `🔍 [last_message debug] recipientId type: ${typeof recipientId}, value: ${recipientId}`
+      );
+      console.log(
+        `🔍 [last_message debug] userSockets Map keys types:`,
+        Array.from(userSockets.keys()).map((key) => `${typeof key}:${key}`)
+      );
+
       const recipientSocketId = userSockets.get(recipientId);
+
+      // Skip users who are not online (not in userSockets Map)
+      if (!recipientSocketId) {
+        console.log(
+          `[last_message debug] User ${recipientId} is offline, skipping real-time update`
+        );
+        continue;
+      }
 
       console.log(
         `🔍 [last_message debug] Looking for recipientId: ${recipientId}`

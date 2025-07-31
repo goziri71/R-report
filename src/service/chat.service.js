@@ -423,7 +423,6 @@ export class ChatService {
       message.readBy.push({ userId, readAt: new Date() });
       await message.save();
     }
-
     return message;
   }
 
