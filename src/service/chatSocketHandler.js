@@ -166,6 +166,23 @@ const sendLastMessageUpdate = async (
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
       const recipientSocketId = userSockets.get(recipientId);
+
+      // Debug: Check userSockets Map
+      console.log(
+        `🔍 [last_message debug] userSockets Map size: ${userSockets.size}`
+      );
+      console.log(
+        `🔍 [last_message debug] userSockets keys: ${Array.from(
+          userSockets.keys()
+        ).join(", ")}`
+      );
+      console.log(
+        `🔍 [last_message debug] Looking for recipientId: ${recipientId}`
+      );
+      console.log(
+        `🔍 [last_message debug] Found socketId: ${recipientSocketId}`
+      );
+
       const recipientSocket = recipientSocketId
         ? io.sockets.sockets.get(recipientSocketId)
         : null;
@@ -245,6 +262,11 @@ export const handleChatSocketEvents = (io) => {
       const { userId } = userData;
       socket.userId = userId;
       userSockets.set(userId, socket.id);
+
+      // Debug: Check if userSockets is working
+      console.log(`🔐 Authentication: User ${userId} with socket ${socket.id}`);
+      console.log(`🔍 userSockets Map size: ${userSockets.size}`);
+      console.log(`🔍 userSockets.get(${userId}): ${userSockets.get(userId)}`);
 
       onlineUsers.set(userId, {
         socketId: socket.id,
