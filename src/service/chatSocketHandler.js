@@ -163,19 +163,21 @@ const sendLastMessageUpdate = async (
           participant.userId.toString() !== excludeUserId.toString())
     );
 
+    // Debug: Check userSockets Map once for this update
+    console.log(
+      `🔍 [last_message debug] userSockets Map size: ${userSockets.size}`
+    );
+    console.log(
+      `🔍 [last_message debug] userSockets keys: ${Array.from(
+        userSockets.keys()
+      ).join(", ")}`
+    );
+
     for (const recipient of recipients) {
       const recipientId = recipient.userId.toString();
+      console.log("this is zee checking for this" + recipientId);
       const recipientSocketId = userSockets.get(recipientId);
 
-      // Debug: Check userSockets Map
-      console.log(
-        `🔍 [last_message debug] userSockets Map size: ${userSockets.size}`
-      );
-      console.log(
-        `🔍 [last_message debug] userSockets keys: ${Array.from(
-          userSockets.keys()
-        ).join(", ")}`
-      );
       console.log(
         `🔍 [last_message debug] Looking for recipientId: ${recipientId}`
       );
@@ -260,6 +262,15 @@ export const handleChatSocketEvents = (io) => {
 
     socket.on("authenticate", async (userData) => {
       const { userId } = userData;
+
+      // Remove any existing socket for this user (prevent duplicates)
+      const existingSocketId = userSockets.get(userId);
+      if (existingSocketId) {
+        console.log(
+          `🔄 Replacing existing socket for user ${userId}: ${existingSocketId} -> ${socket.id}`
+        );
+      }
+
       socket.userId = userId;
       userSockets.set(userId, socket.id);
 
