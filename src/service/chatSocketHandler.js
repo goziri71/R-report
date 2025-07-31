@@ -816,6 +816,27 @@ export const handleChatSocketEvents = (io) => {
       }
     });
 
+    // Generate a signed URL for a voice note file
+    socket.on("get_voice_note_url", async (data) => {
+      console.log("get_voice_note_url called", data);
+      const { filePath } = data;
+      try {
+        const { data: signedData, error } = await storageClient
+          .from("voice-notes")
+          .createSignedUrl(filePath, 3600); // 1 hour expiry
+        if (error) {
+          socket.emit("voice_note_error", { error: error.message });
+        } else {
+          socket.emit("voice_note_url", {
+            filePath,
+            signedUrl: signedData.signedUrl,
+          });
+        }
+      } catch (err) {
+        socket.emit("voice_note_error", { error: err.message });
+      }
+    });
+
     socket.on("disconnect", () => {
       const userId = socket.userId;
 
