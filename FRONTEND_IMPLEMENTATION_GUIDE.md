@@ -53,7 +53,7 @@ document.getElementById("mediaInput").addEventListener("change", (event) => {
   event.target.value = "";
 });
 
-// 2. Unified file upload handler
+// 2. Unified file upload handler (Optimized for speed)
 function handleFileUpload(file, chatId) {
   console.log(
     "📁 Processing file:",
@@ -68,22 +68,34 @@ function handleFileUpload(file, chatId) {
   const tempId = Date.now().toString();
 
   // Show upload progress
-  showUploadProgress(tempId, `Uploading ${file.name}...`);
+  showUploadProgress(tempId, "Starting upload...");
 
   reader.onload = async (e) => {
     const base64Data = e.target.result.split(",")[1]; // Remove data URL prefix
 
-    // Get video duration if it's a video file
+    // For videos, skip duration extraction for faster upload
+    // Duration can be extracted later if needed
     let duration = 0;
-    if (file.type.startsWith("video/")) {
-      const video = document.createElement("video");
-      video.src = URL.createObjectURL(file);
-      video.onloadedmetadata = () => {
-        duration = video.duration;
-        emitMediaUpload(base64Data, file, duration, chatId, tempId);
-      };
+
+    // Only extract duration for small videos (< 10MB) to avoid blocking
+    if (file.type.startsWith("video/") && file.size < 10 * 1024 * 1024) {
+      try {
+        const video = document.createElement("video");
+        video.src = URL.createObjectURL(file);
+        video.onloadedmetadata = () => {
+          duration = video.duration;
+          emitMediaUpload(base64Data, file, duration, chatId, tempId);
+        };
+        video.onerror = () => {
+          // If duration extraction fails, continue without it
+          emitMediaUpload(base64Data, file, 0, chatId, tempId);
+        };
+      } catch (error) {
+        // If duration extraction fails, continue without it
+        emitMediaUpload(base64Data, file, 0, chatId, tempId);
+      }
     } else {
-      // For non-video files, emit immediately
+      // For large videos or non-video files, emit immediately
       emitMediaUpload(base64Data, file, 0, chatId, tempId);
     }
   };
@@ -123,6 +135,12 @@ socket.on("media_error", (data) => {
   console.error("❌ Media upload failed:", data.error);
   hideUploadProgress(data.tempId);
   showErrorMessage("Failed to send media: " + data.error);
+});
+
+// NEW: Progress tracking for better UX
+socket.on("media_progress", (data) => {
+  console.log("📊 Upload progress:", data.progress + "% - " + data.message);
+  updateUploadProgress(data.tempId, data.progress, data.message);
 });
 
 // 5. Enhanced new_message handler for media types
@@ -320,6 +338,19 @@ function hideUploadProgress(tempId) {
   const progressElement = document.getElementById(`progress-${tempId}`);
   if (progressElement) {
     progressElement.remove();
+  }
+}
+
+// NEW: Update progress with percentage
+function updateUploadProgress(tempId, progress, message) {
+  const progressElement = document.getElementById(`progress-${tempId}`);
+  if (progressElement) {
+    progressElement.innerHTML = `
+      <div class="progress-content">
+        <div class="spinner"></div>
+        <span>${message} (${progress}%)</span>
+      </div>
+    `;
   }
 }
 

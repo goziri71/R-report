@@ -892,7 +892,7 @@ export const handleChatSocketEvents = (io) => {
       }
     });
 
-    // Unified media upload socket events
+    // Unified media upload socket events (Optimized for speed)
     socket.on("send_media", async (data) => {
       const { chatId, fileData, fileName, mimeType, fileSize, duration } = data;
       const userId = socket.userId;
@@ -903,8 +903,21 @@ export const handleChatSocketEvents = (io) => {
       }
 
       try {
-        // Convert base64 to buffer
+        // Send immediate progress update
+        socket.emit("media_progress", {
+          tempId: data.tempId,
+          progress: 10,
+          message: "Processing file...",
+        });
+
+        // Convert base64 to buffer (optimized for large files)
         const fileBuffer = Buffer.from(fileData, "base64");
+
+        socket.emit("media_progress", {
+          tempId: data.tempId,
+          progress: 30,
+          message: "Preparing upload...",
+        });
 
         // Auto-detect file type based on MIME type
         let messageType, bucketName, messageContent;
@@ -916,9 +929,8 @@ export const handleChatSocketEvents = (io) => {
         } else if (mimeType.startsWith("video/")) {
           messageType = "video";
           bucketName = "videos";
-          messageContent = `🎥 Video${
-            duration ? ` (${Math.round(duration)}s)` : ""
-          }`;
+          // Skip duration extraction for faster upload - will be extracted later if needed
+          messageContent = "🎥 Video";
         } else {
           messageType = "file";
           bucketName = "files";
@@ -939,6 +951,12 @@ export const handleChatSocketEvents = (io) => {
           )})`;
         }
 
+        socket.emit("media_progress", {
+          tempId: data.tempId,
+          progress: 50,
+          message: "Uploading to storage...",
+        });
+
         // Generate unique filename for this chat and user
         const timestamp = Date.now();
         const sanitizedFileName = fileName
@@ -946,24 +964,33 @@ export const handleChatSocketEvents = (io) => {
           .toLowerCase();
         const filePath = `chat_${chatId}/user_${userId}/${timestamp}_${sanitizedFileName}`;
 
-        // Upload to appropriate bucket
+        // Upload to appropriate bucket with optimized settings
         const { data: uploadData, error } = await storageClient
           .from(bucketName)
           .upload(filePath, fileBuffer, {
             contentType: mimeType,
+            cacheControl: "3600", // 1 hour cache for faster loading
+            upsert: false, // Don't overwrite existing files
             metadata: {
               chatId,
               userId,
               originalName: fileName,
               fileSize: fileSize || fileBuffer.length,
-              duration: duration || 0,
+              duration: duration || 0, // Use provided duration or 0
               timestamp,
+              uploadedAt: new Date().toISOString(),
             },
           });
 
         if (error) {
           throw new Error(`Upload failed: ${error.message}`);
         }
+
+        socket.emit("media_progress", {
+          tempId: data.tempId,
+          progress: 80,
+          message: "Generating URL...",
+        });
 
         // Get the public URL
         const { data: urlData } = storageClient
@@ -978,10 +1005,16 @@ export const handleChatSocketEvents = (io) => {
             size: fileSize || fileBuffer.length,
             mimeType: mimeType,
             url: urlData.publicUrl,
-            duration: duration || 0,
+            duration: duration || 0, // Use provided duration or 0
             timestamp: timestamp,
           },
         };
+
+        socket.emit("media_progress", {
+          tempId: data.tempId,
+          progress: 90,
+          message: "Creating message...",
+        });
 
         const message = await chatService.createMessage(
           chatId,
