@@ -93,9 +93,6 @@ app.use(ErrorHandlerMiddleware);
   try {
     await db.sync();
     await initializeDatabases();
-    // app.listen(port, () => {
-    //   console.log(`🚀 Server listening on port ${port}`);
-    // });
     server.listen(port, () => {
       console.log(`🚀 Server listening on port ${port}`);
     });

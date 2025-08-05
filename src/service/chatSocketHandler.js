@@ -892,6 +892,192 @@ export const handleChatSocketEvents = (io) => {
       }
     });
 
+    // Unified media upload socket events
+    socket.on("send_media", async (data) => {
+      const { chatId, fileData, fileName, mimeType, fileSize, duration } = data;
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        // Convert base64 to buffer
+        const fileBuffer = Buffer.from(fileData, "base64");
+
+        // Auto-detect file type based on MIME type
+        let messageType, bucketName, messageContent;
+
+        if (mimeType.startsWith("image/")) {
+          messageType = "photo";
+          bucketName = "photos";
+          messageContent = "📷 Photo";
+        } else if (mimeType.startsWith("video/")) {
+          messageType = "video";
+          bucketName = "videos";
+          messageContent = `🎥 Video${
+            duration ? ` (${Math.round(duration)}s)` : ""
+          }`;
+        } else {
+          messageType = "file";
+          bucketName = "files";
+
+          // Format file size for display
+          const formatFileSize = (bytes) => {
+            if (bytes === 0) return "0 Bytes";
+            const k = 1024;
+            const sizes = ["Bytes", "KB", "MB", "GB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (
+              parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+            );
+          };
+
+          messageContent = `📎 ${fileName} (${formatFileSize(
+            fileSize || fileBuffer.length
+          )})`;
+        }
+
+        // Generate unique filename for this chat and user
+        const timestamp = Date.now();
+        const sanitizedFileName = fileName
+          .replace(/[^a-zA-Z0-9._-]/g, "")
+          .toLowerCase();
+        const filePath = `chat_${chatId}/user_${userId}/${timestamp}_${sanitizedFileName}`;
+
+        // Upload to appropriate bucket
+        const { data: uploadData, error } = await storageClient
+          .from(bucketName)
+          .upload(filePath, fileBuffer, {
+            contentType: mimeType,
+            metadata: {
+              chatId,
+              userId,
+              originalName: fileName,
+              fileSize: fileSize || fileBuffer.length,
+              duration: duration || 0,
+              timestamp,
+            },
+          });
+
+        if (error) {
+          throw new Error(`Upload failed: ${error.message}`);
+        }
+
+        // Get the public URL
+        const { data: urlData } = storageClient
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        // Create message with media data
+        const additionalData = {
+          fileData: {
+            filename: filePath,
+            originalName: fileName,
+            size: fileSize || fileBuffer.length,
+            mimeType: mimeType,
+            url: urlData.publicUrl,
+            duration: duration || 0,
+            timestamp: timestamp,
+          },
+        };
+
+        const message = await chatService.createMessage(
+          chatId,
+          userId,
+          messageContent,
+          messageType,
+          additionalData
+        );
+
+        const populatedMessage = await chatService.getPopulatedMessage(
+          message._id
+        );
+
+        // Broadcast to chat room
+        io.to(chatId).emit("new_message", populatedMessage);
+
+        // Send unified delivery confirmation
+        socket.emit("media_delivered", {
+          messageId: message._id,
+          tempId: data.tempId,
+          filename: filePath,
+          url: urlData.publicUrl,
+          messageType: messageType,
+          fileData: additionalData.fileData,
+        });
+
+        // Update last_message for users not in chat room
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
+
+        // Send notifications
+        await sendNotificationToRecipients(
+          chatId,
+          userId,
+          populatedMessage,
+          onlineUsers
+        );
+
+        console.log(
+          `📁 ${messageType} uploaded to chat ${chatId} by user ${userId}`
+        );
+      } catch (error) {
+        console.error("Error sending media:", error);
+        socket.emit("media_error", {
+          error: error.message || "Failed to send media",
+          tempId: data.tempId,
+        });
+      }
+    });
+
+    // Generate signed URLs for media files (unified)
+    socket.on("get_media_url", async (data) => {
+      const { filePath, bucketType } = data;
+      const userId = socket.userId;
+
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        let bucketName;
+        switch (bucketType) {
+          case "photo":
+            bucketName = "photos";
+            break;
+          case "video":
+            bucketName = "videos";
+            break;
+          case "file":
+            bucketName = "files";
+            break;
+          case "voice":
+            bucketName = "voice-notes";
+            break;
+          default:
+            throw new Error("Invalid bucket type");
+        }
+
+        const { data: signedData, error } = await storageClient
+          .from(bucketName)
+          .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+        if (error) {
+          socket.emit("media_url_error", { error: error.message });
+        } else {
+          socket.emit("media_url", {
+            filePath,
+            signedUrl: signedData.signedUrl,
+            bucketType,
+          });
+        }
+      } catch (err) {
+        socket.emit("media_url_error", { error: err.message });
+      }
+    });
+
     socket.on("disconnect", () => {
       const userId = socket.userId;
 
