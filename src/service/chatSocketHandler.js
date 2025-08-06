@@ -1100,7 +1100,8 @@ export const handleChatSocketEvents = (io) => {
           userId,
           messageContent,
           messageType,
-          additionalData
+          additionalData,
+          fileData.url
         );
 
         const populatedMessage = await chatService.getPopulatedMessage(
