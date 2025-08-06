@@ -1064,40 +1064,86 @@ export const handleChatSocketEvents = (io) => {
     //   }
     // });
 
-    async function sendMediaMessage(chatId, file) {
-      try {
-        // Step 1: Upload file via HTTP
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("chatId", chatId);
+    // SERVER-SIDE CODE - Media Upload Socket Handler
+    socket.on("send_uploaded_media", async (data) => {
+      const { chatId, fileData, messageContent, messageType } = data;
+      const userId = socket.userId;
 
-        const uploadResponse = await fetch("/api/v1/chat/upload-file", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: formData,
+      if (!userId) {
+        socket.emit("error", { message: "User not authenticated" });
+        return;
+      }
+
+      try {
+        // Verify user has access to this chat
+        const chat = await Chat.findOne({
+          _id: chatId,
+          "participants.userId": userId,
+          "participants.isActive": true,
         });
 
-        const uploadResult = await uploadResponse.json();
-
-        if (!uploadResult.status) {
-          throw new Error(uploadResult.message || "File upload failed");
+        if (!chat) {
+          socket.emit("media_error", {
+            message: "Chat not found or access denied",
+            tempId: data.tempId,
+          });
+          return;
         }
 
-        // Step 2: Send message via socket with uploaded file data
-        socket.emit("send_uploaded_media", {
-          chatId: chatId,
-          fileData: uploadResult.data.fileData,
-          messageContent: uploadResult.data.messageContent,
-          messageType: uploadResult.data.messageType,
-          tempId: generateTempId(),
+        // Create media message with uploaded file data
+        const additionalData = {
+          fileData: fileData,
+        };
+
+        const message = await chatService.createMessage(
+          chatId,
+          userId,
+          messageContent,
+          messageType,
+          additionalData
+        );
+
+        const populatedMessage = await chatService.getPopulatedMessage(
+          message._id
+        );
+
+        // Broadcast media message to all users in chat room
+        io.to(chatId).emit("new_message", populatedMessage);
+
+        // Confirm to sender that media message was created successfully
+        socket.emit("media_delivered", {
+          messageId: message._id,
+          tempId: data.tempId,
+          mediaType: messageType,
+          mediaUrl: fileData.url,
+          fileName: fileData.originalName,
         });
+
+        // Update chat list preview for users not currently in this chat room
+        await sendLastMessageUpdate(io, userSockets, chatId, userId);
+
+        // Send push notifications to offline/away users
+        await sendNotificationToRecipients(
+          chatId,
+          userId,
+          populatedMessage,
+          onlineUsers
+        );
+
+        console.log(
+          `📁 ${messageType.toUpperCase()} media sent to chat ${chatId} by user ${userId}: ${
+            fileData.originalName
+          }`
+        );
       } catch (error) {
-        console.error("Media send error:", error);
-        // Handle error in UI
+        console.error("Error creating media message:", error);
+        socket.emit("media_error", {
+          error: error.message || "Failed to create media message",
+          tempId: data.tempId,
+          mediaType: messageType,
+        });
       }
-    }
+    });
 
     // Generate signed URLs for media files (unified)
     socket.on("get_media_url", async (data) => {
