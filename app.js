@@ -18,11 +18,17 @@ import http from "http"; // Import http to create the server for socket.io
 import { Server } from "socket.io"; // Import socket.io
 import { handleChatSocketEvents } from "./src/service/chatSocketHandler.js";
 import { User } from "./src/models/auth/index.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 const port = Config.port;
 const server = http.createServer(app);
 const io = new Server(server);
+
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -57,12 +63,12 @@ app.use("/api/v1/chat", chatRoutes);
 // Serve API documentation
 app.use("/docs", express.static("public"));
 app.get("/docs", (req, res) => {
-  res.sendFile(new URL("./public/swagger-ui.html", import.meta.url));
+  res.sendFile(path.join(__dirname, "public", "swagger-ui.html"));
 });
 
 // Serve swagger.json for the documentation
 app.get("/swagger.json", (req, res) => {
-  res.sendFile(new URL("./public/swagger.json", import.meta.url));
+  res.sendFile(path.join(__dirname, "public", "swagger.json"));
 });
 
 // Redirect root to documentation
