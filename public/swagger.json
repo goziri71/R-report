@@ -11,7 +11,7 @@
   },
   "servers": [
     {
-      "url": "https://your-hosted-server.com/api/v1",
+      "url": "https://r-report-v1.onrender.com/api/v1",
       "description": "Production server"
     },
     {
