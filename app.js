@@ -54,6 +54,22 @@ app.use("/api/v1/user", createWeeklyReport);
 app.use("/api/v1/thirdparty", thirdPartyRoutes);
 app.use("/api/v1/chat", chatRoutes);
 
+// Serve API documentation
+app.use("/docs", express.static("public"));
+app.get("/docs", (req, res) => {
+  res.sendFile(new URL("./public/swagger-ui.html", import.meta.url));
+});
+
+// Serve swagger.json for the documentation
+app.get("/swagger.json", (req, res) => {
+  res.sendFile(new URL("./public/swagger.json", import.meta.url));
+});
+
+// Redirect root to documentation
+app.get("/", (req, res) => {
+  res.redirect("/docs");
+});
+
 app.post("/api/subscribe", async (req, res) => {
   try {
     const { userId, subscription } = req.body;
