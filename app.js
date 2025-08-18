@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { Config } from "./src/config/config.js";
-import { connectDB, initializeDatabases } from "./src/database/database.js";
+import { initializeDatabases } from "./src/database/database.js";
 import { ErrorHandlerMiddleware } from "./src/middleware/errorHandler.js";
 import { rateLimiters } from "./src/middleware/rateLimiters.js";
 import userRouter from "./src/routes/admin/users/index.js";
