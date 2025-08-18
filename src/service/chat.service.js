@@ -191,7 +191,6 @@ export class ChatService {
       "participants.userId": userId,
       "participants.isActive": true,
       status: "active",
-      lastMessageId: { $exists: true },
     }).sort({ updatedAt: -1 });
 
     // Transform chats with additional user info

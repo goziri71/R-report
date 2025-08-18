@@ -295,6 +295,8 @@ export const handleChatSocketEvents = (io) => {
 
       socket.userId = userId;
       userSockets.set(userId, socket.id);
+      // Join a per-user room for targeted events (e.g., chat_created)
+      socket.join(`user:${userId}`);
 
       // Debug: Check if userSockets is working
       console.log(`🔐 Authentication: User ${userId} with socket ${socket.id}`);
@@ -355,6 +357,16 @@ export const handleChatSocketEvents = (io) => {
                   messageError
                 );
               }
+            } else if (!isInChatRoom && !chat.lastMessageId) {
+              // Emit placeholder so UI can show empty chat in list
+              socket.emit("last_message", {
+                chatId: chatId,
+                message: null,
+                unreadCount: chat.unreadCount || 0,
+                chatType: chat.chatType,
+                chatName: chat.metadata?.name || "Unknown Chat",
+                recipientName: chat.metadata?.recipientName || null,
+              });
             }
           }
         } catch (error) {
@@ -393,6 +405,16 @@ export const handleChatSocketEvents = (io) => {
                 recipientName: chat.metadata?.recipientName || null,
               });
             }
+          } else {
+            // Emit placeholder for empty chats
+            socket.emit("last_message_update", {
+              chatId: chat._id.toString(),
+              message: null,
+              unreadCount: chat.unreadCount || 0,
+              chatType: chat.chatType,
+              chatName: chat.metadata?.name || "Unknown Chat",
+              recipientName: chat.metadata?.recipientName || null,
+            });
           }
         }
       } catch (error) {

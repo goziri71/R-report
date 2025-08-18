@@ -180,6 +180,23 @@ export const createGroupChat = TryCatchFunction(async (req, res) => {
     metadata
   );
 
+  // Real-time: notify all participants (including creator) about the new chat
+  try {
+    const io = req.io;
+    const allParticipantIds = chat.participants
+      .filter((p) => p.isActive)
+      .map((p) => p.userId.toString());
+
+    // Emit to each participant's personal room
+    for (const pid of allParticipantIds) {
+      io.to(`user:${pid}`).emit("chat_created", {
+        chat,
+      });
+    }
+  } catch (e) {
+    console.error("chat_created emit error:", e);
+  }
+
   return res.status(201).json({
     status: true,
     code: 201,
