@@ -40,10 +40,6 @@ const setupAssociations = () => {
   User.hasMany(ActionItem, { foreignKey: "userId" });
   User.hasMany(OngoingTask, { foreignKey: "userId" });
   User.hasMany(CompletedTask, { foreignKey: "userId" });
-
-  ActionItem.belongsTo(WeeklyReport, { foreignKey: "userId" });
-  OngoingTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
-  CompletedTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
 };
 
 export default setupAssociations;

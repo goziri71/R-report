@@ -186,108 +186,102 @@ const isAdmin = (user) => {
 };
 
 export const createWeeklyReport = TryCatchFunction(async (req, res) => {
-  if (
-    !req.body ||
-    !req.body.ActionItem ||
-    !req.body.OngoingTask ||
-    !req.body.CompletedTask
-  ) {
-    throw new ErrorClass(
-      "ActionItem, OngoingTask, and CompletedTask are required",
-      400
-    );
-  }
-
-  let actionItems = req.body.ActionItem;
-  let ongoingTasks = req.body.OngoingTask;
-  let completedTasks = req.body.CompletedTask;
-
-  actionItems = Array.isArray(actionItems) ? actionItems : [actionItems];
-  ongoingTasks = Array.isArray(ongoingTasks) ? ongoingTasks : [ongoingTasks];
-  completedTasks = Array.isArray(completedTasks)
-    ? completedTasks
-    : [completedTasks];
+  const {
+    ActionItem: actionItemsRaw,
+    OngoingTask: ongoingTasksRaw,
+    CompletedTask: completedTasksRaw,
+    status,
+  } = req.body;
 
   const userId = req.user;
-  if (!userId) {
-    throw new ErrorClass("User authentication required", 401);
-  }
+  if (!userId) throw new ErrorClass("User authentication required", 401);
   const userExists = await User.findByPk(userId);
-  if (!userExists) {
-    throw new ErrorClass("User not found", 404);
-  }
-  const department = userExists.occupation;
-  if (
-    actionItems.length === 0 &&
-    ongoingTasks.length === 0 &&
-    completedTasks.length === 0
-  ) {
-    throw new ErrorClass("At least one task is required", 400);
+  if (!userExists) throw new ErrorClass("User not found", 404);
+
+  const actionItems = Array.isArray(actionItemsRaw)
+    ? actionItemsRaw
+    : actionItemsRaw
+    ? [actionItemsRaw]
+    : [];
+  const ongoingTasks = Array.isArray(ongoingTasksRaw)
+    ? ongoingTasksRaw
+    : ongoingTasksRaw
+    ? [ongoingTasksRaw]
+    : [];
+  const completedTasks = Array.isArray(completedTasksRaw)
+    ? completedTasksRaw
+    : completedTasksRaw
+    ? [completedTasksRaw]
+    : [];
+
+  const isDraft = status === "draft";
+
+  // For draft: allow empty payload. For submit: enforce at least one item
+  if (!isDraft) {
+    if (
+      actionItems.length === 0 &&
+      ongoingTasks.length === 0 &&
+      completedTasks.length === 0
+    ) {
+      throw new ErrorClass("At least one task is required", 400);
+    }
   }
 
   const report = await WeeklyReport.create({
     userId,
     department: userExists.occupation,
-    submittedAt: new Date(),
+    status: isDraft ? "draft" : "submitted",
+    submittedAt: isDraft ? null : new Date(),
+    lastSavedAt: new Date(),
   });
 
+  const createItem = (Model, item, reportId, department) =>
+    Model.create({
+      userId,
+      reportId,
+      department,
+      description: typeof item === "string" ? item : JSON.stringify(item),
+    });
+
   if (actionItems.length > 0) {
-    const actionPromises = actionItems.map((item) => {
-      return ActionItem.create({
-        userId: userId,
-        reportId: report.id,
-        department: userExists.occupation,
-        description: typeof item === "string" ? item : JSON.stringify(item),
-      });
-    });
-    await Promise.all(actionPromises);
+    await Promise.all(
+      actionItems.map((item) =>
+        createItem(ActionItem, item, report.id, userExists.occupation)
+      )
+    );
   }
-
   if (ongoingTasks.length > 0) {
-    const ongoingPromises = ongoingTasks.map((task) => {
-      return OngoingTask.create({
-        userId: userId,
-        reportId: report.id,
-        department: userExists.occupation,
-        description: typeof task === "string" ? task : JSON.stringify(task),
-      });
-    });
-    await Promise.all(ongoingPromises);
+    await Promise.all(
+      ongoingTasks.map((task) =>
+        createItem(OngoingTask, task, report.id, userExists.occupation)
+      )
+    );
   }
-
   if (completedTasks.length > 0) {
-    const completedPromises = completedTasks.map((task) => {
-      return CompletedTask.create({
-        userId: userId,
-        reportId: report.id,
-        department,
-        description: typeof task === "string" ? task : JSON.stringify(task),
-      });
-    });
-    await Promise.all(completedPromises);
+    await Promise.all(
+      completedTasks.map((task) =>
+        createItem(CompletedTask, task, report.id, userExists.occupation)
+      )
+    );
   }
 
-  if (isAdmin(userExists)) {
+  // Send notifications only for submitted reports and only when author is admin
+  if (!isDraft && isAdmin(userExists)) {
     try {
       const superAdmins = await getSuperAdminUsers();
       if (superAdmins.length > 0) {
-        const emailPromises = superAdmins.map((superAdmin) =>
-          sendReportNotification(
-            report,
-            userExists,
-            superAdmin,
-            actionItems,
-            ongoingTasks,
-            completedTasks
+        await Promise.all(
+          superAdmins.map((superAdmin) =>
+            sendReportNotification(
+              report,
+              userExists,
+              superAdmin,
+              actionItems,
+              ongoingTasks,
+              completedTasks
+            )
           )
         );
-
-        await Promise.all(emailPromises);
-        console.log(
-          `Email notifications sent to ${superAdmins.length} super admin(s) for admin report submission`
-        );
-      } else {
-        console.warn("No super admin users found to send email notification");
       }
     } catch (emailError) {
       console.error(
@@ -296,14 +290,158 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
       );
     }
   }
+
   res.status(201).json({
     code: 201,
     status: "successful",
-    message: "Weekly Report created successfully",
+    message: isDraft
+      ? "Draft saved successfully"
+      : "Weekly Report created successfully",
     report: {
       id: report.id,
       userId: report.userId,
       department: report.department,
+      status: report.status,
+      submittedAt: report.submittedAt,
+      lastSavedAt: report.lastSavedAt,
+    },
+  });
+});
+
+// Save or update an existing draft by ID (owner only)
+export const saveDraft = TryCatchFunction(async (req, res) => {
+  const { reportId } = req.params;
+  const {
+    ActionItem: actionItemsRaw,
+    OngoingTask: ongoingTasksRaw,
+    CompletedTask: completedTasksRaw,
+    meta,
+  } = req.body || {};
+  const userId = req.user;
+
+  const report = await WeeklyReport.findOne({
+    where: { id: reportId, userId },
+  });
+  if (!report) throw new ErrorClass("Draft report not found", 404);
+  if (report.status !== "draft")
+    throw new ErrorClass("Report is not a draft", 400);
+
+  // Update optional metadata
+  if (meta) {
+    await report.update({ ...meta, lastSavedAt: new Date() });
+  } else {
+    await report.update({ lastSavedAt: new Date() });
+  }
+
+  const actionItems = Array.isArray(actionItemsRaw)
+    ? actionItemsRaw
+    : actionItemsRaw
+    ? [actionItemsRaw]
+    : [];
+  const ongoingTasks = Array.isArray(ongoingTasksRaw)
+    ? ongoingTasksRaw
+    : ongoingTasksRaw
+    ? [ongoingTasksRaw]
+    : [];
+  const completedTasks = Array.isArray(completedTasksRaw)
+    ? completedTasksRaw
+    : completedTasksRaw
+    ? [completedTasksRaw]
+    : [];
+
+  // For simplicity: append new items provided on each save
+  const createItem = (Model, item) =>
+    Model.create({
+      userId,
+      reportId: report.id,
+      department: report.department,
+      description: typeof item === "string" ? item : JSON.stringify(item),
+    });
+
+  const ops = [];
+  if (actionItems.length > 0)
+    ops.push(Promise.all(actionItems.map((i) => createItem(ActionItem, i))));
+  if (ongoingTasks.length > 0)
+    ops.push(Promise.all(ongoingTasks.map((i) => createItem(OngoingTask, i))));
+  if (completedTasks.length > 0)
+    ops.push(
+      Promise.all(completedTasks.map((i) => createItem(CompletedTask, i)))
+    );
+
+  if (ops.length) await Promise.all(ops);
+
+  res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Draft saved",
+    report: {
+      id: report.id,
+      status: report.status,
+      lastSavedAt: report.lastSavedAt,
+    },
+  });
+});
+
+// Submit an existing draft
+export const submitDraft = TryCatchFunction(async (req, res) => {
+  const { reportId } = req.params;
+  const userId = req.user;
+
+  const [report, user] = await Promise.all([
+    WeeklyReport.findOne({ where: { id: reportId, userId } }),
+    User.findByPk(userId),
+  ]);
+  if (!report) throw new ErrorClass("Draft report not found", 404);
+  if (report.status !== "draft")
+    throw new ErrorClass("Report is not a draft", 400);
+
+  // Validate presence of at least one item
+  const [aiCount, ogCount, cmCount] = await Promise.all([
+    ActionItem.count({ where: { reportId: report.id, userId } }),
+    OngoingTask.count({ where: { reportId: report.id, userId } }),
+    CompletedTask.count({ where: { reportId: report.id, userId } }),
+  ]);
+  if (aiCount + ogCount + cmCount === 0) {
+    throw new ErrorClass("At least one task is required to submit", 400);
+  }
+
+  await report.update({ status: "submitted", submittedAt: new Date() });
+
+  if (isAdmin(user)) {
+    try {
+      const superAdmins = await getSuperAdminUsers();
+      if (superAdmins.length > 0) {
+        // Collect items for email
+        const [actionItems, ongoingTasks, completedTasks] = await Promise.all([
+          ActionItem.findAll({ where: { reportId: report.id, userId } }),
+          OngoingTask.findAll({ where: { reportId: report.id, userId } }),
+          CompletedTask.findAll({ where: { reportId: report.id, userId } }),
+        ]);
+        await Promise.all(
+          superAdmins.map((superAdmin) =>
+            sendReportNotification(
+              report,
+              user,
+              superAdmin,
+              actionItems.map((x) => x.description),
+              ongoingTasks.map((x) => x.description),
+              completedTasks.map((x) => x.description)
+            )
+          )
+        );
+      }
+    } catch (emailError) {
+      console.error("Email notification failed after submit:", emailError);
+    }
+  }
+
+  res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Draft submitted successfully",
+    report: {
+      id: report.id,
+      status: report.status,
       submittedAt: report.submittedAt,
     },
   });
@@ -536,7 +674,7 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("Limit must be between 1 and 100", 400);
 
   const queryOptions = {
-    where: {},
+    where: { status: "submitted" },
     include: [
       {
         model: User,

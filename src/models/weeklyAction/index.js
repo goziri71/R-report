@@ -16,9 +16,18 @@ export const WeeklyReport = db.define("WeeklyReport", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  status: {
+    type: DataTypes.STRING, // values: 'draft' | 'submitted' | 'archived'
+    allowNull: false,
+    defaultValue: "submitted",
+  },
   submittedAt: {
     type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
+    allowNull: true,
+  },
+  lastSavedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
   },
 });
 
