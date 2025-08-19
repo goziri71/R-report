@@ -447,6 +447,59 @@ export const submitDraft = TryCatchFunction(async (req, res) => {
   });
 });
 
+// List current user's drafts
+export const getMyDrafts = TryCatchFunction(async (req, res) => {
+  const userId = req.user;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = (page - 1) * limit;
+
+  const { count, rows } = await WeeklyReport.findAndCountAll({
+    where: { userId, status: "draft" },
+    include: [
+      {
+        model: ActionItem,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+      {
+        model: OngoingTask,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+      {
+        model: CompletedTask,
+        required: false,
+        attributes: ["id", "description", "createdAt"],
+      },
+    ],
+    order: [["lastSavedAt", "DESC"]],
+    limit,
+    offset,
+    distinct: true,
+  });
+
+  const totalPages = Math.ceil(count / limit);
+
+  return res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Draft weekly reports retrieved successfully",
+    data: rows,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalDrafts: count,
+      draftsPerPage: limit,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  });
+});
+
+// Get a specific draft by ID (owner only)
+// Removed getDraftById per requirement: single drafts endpoint only
+
 // import { ErrorClass } from "../../utils/errorClass/index.js";
 // import { TryCatchFunction } from "../../utils/tryCatch/index.js";
 // import { User } from "../../models/auth/index.js";
