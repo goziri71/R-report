@@ -536,15 +536,92 @@ export const submitDraft = TryCatchFunction(async (req, res) => {
   });
 });
 
-// List current user's drafts
-export const getMyDrafts = TryCatchFunction(async (req, res) => {
-  const userId = req.user;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 50;
-  const offset = (page - 1) * limit;
+// // List current user's drafts
+// export const getMyDrafts = TryCatchFunction(async (req, res) => {
+//   const userId = req.user;
+//   const page = parseInt(req.query.page) || 1;
+//   const limit = parseInt(req.query.limit) || 50;
+//   const offset = (page - 1) * limit;
 
-  const { count, rows } = await WeeklyReport.findAndCountAll({
-    where: { userId, status: "draft" },
+//   const { count, rows } = await WeeklyReport.findAndCountAll({
+//     where: { userId, status: "draft" },
+//     include: [
+//       {
+//         model: ActionItem,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: OngoingTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: CompletedTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//     ],
+//     order: [["lastSavedAt", "DESC"]],
+//     limit,
+//     offset,
+//     distinct: true,
+//   });
+
+//   const totalPages = Math.ceil(count / limit);
+
+//   return res.status(200).json({
+//     code: 200,
+//     status: true,
+//     message: "Draft weekly reports retrieved successfully",
+//     data: rows,
+//     pagination: {
+//       currentPage: page,
+//       totalPages,
+//       totalDrafts: count,
+//       draftsPerPage: limit,
+//       hasNextPage: page < totalPages,
+//       hasPrevPage: page > 1,
+//     },
+//   });
+// });
+
+// Get a particular user's draft by user ID
+export const getMyDrafts = TryCatchFunction(async (req, res) => {
+  const { userId: targetUserId } = req.params; // Get userId from URL params
+  const currentUserId = req.user; // Current authenticated user
+
+  // Validate that the target user exists
+  const targetUser = await User.findByPk(targetUserId);
+  if (!targetUser) {
+    throw new ErrorClass("Target user not found", 404);
+  }
+
+  // Get the current user for authorization checks
+  const currentUser = await User.findByPk(currentUserId);
+  if (!currentUser) {
+    throw new ErrorClass("Current user not found", 404);
+  }
+
+  // Authorization: Everyone can only view their own drafts
+  if (currentUserId !== parseInt(targetUserId)) {
+    if (currentUser.role === "user" || currentUser.role === "admin") {
+      throw new ErrorClass(
+        "Unauthorized: You can only view your own drafts",
+        403
+      );
+    }
+    // Only superadmin can view other users' drafts
+    if (currentUser.role !== "superadmin") {
+      throw new ErrorClass(
+        "Unauthorized: You can only view your own drafts",
+        403
+      );
+    }
+  }
+
+  const drafts = await WeeklyReport.findAll({
+    where: { userId: targetUserId, status: "draft" },
     include: [
       {
         model: ActionItem,
@@ -561,27 +638,30 @@ export const getMyDrafts = TryCatchFunction(async (req, res) => {
         required: false,
         attributes: ["id", "description", "createdAt"],
       },
+      {
+        model: User,
+        attributes: ["id", "firstName", "lastName", "occupation", "role"],
+      },
     ],
     order: [["lastSavedAt", "DESC"]],
-    limit,
-    offset,
-    distinct: true,
   });
-
-  const totalPages = Math.ceil(count / limit);
 
   return res.status(200).json({
     code: 200,
     status: true,
     message: "Draft weekly reports retrieved successfully",
-    data: rows,
-    pagination: {
-      currentPage: page,
-      totalPages,
-      totalDrafts: count,
-      draftsPerPage: limit,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
+    data: {
+      user: {
+        id: targetUser.id,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        occupation: targetUser.occupation,
+        role: targetUser.role,
+      },
+      drafts: drafts.map((draft) => {
+        const { User, ...rest } = draft.toJSON();
+        return rest;
+      }),
     },
   });
 });
