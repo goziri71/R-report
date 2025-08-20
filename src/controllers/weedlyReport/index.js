@@ -471,7 +471,71 @@ export const saveDraft = TryCatchFunction(async (req, res) => {
   });
 });
 
-// Submit an existing draft
+// // Submit an existing draft
+// export const submitDraft = TryCatchFunction(async (req, res) => {
+//   const { reportId } = req.params;
+//   const userId = req.user;
+
+//   const [report, user] = await Promise.all([
+//     WeeklyReport.findOne({ where: { id: reportId, userId } }),
+//     User.findByPk(userId),
+//   ]);
+//   if (!report) throw new ErrorClass("Draft report not found", 404);
+//   if (report.status !== "draft")
+//     throw new ErrorClass("Report is not a draft", 400);
+
+//   // Validate presence of at least one item
+//   const [aiCount, ogCount, cmCount] = await Promise.all([
+//     ActionItem.count({ where: { reportId: report.id, userId } }),
+//     OngoingTask.count({ where: { reportId: report.id, userId } }),
+//     CompletedTask.count({ where: { reportId: report.id, userId } }),
+//   ]);
+//   if (aiCount + ogCount + cmCount === 0) {
+//     throw new ErrorClass("At least one task is required to submit", 400);
+//   }
+
+//   await report.update({ status: "submitted", submittedAt: new Date() });
+
+//   if (isAdmin(user)) {
+//     try {
+//       const superAdmins = await getSuperAdminUsers();
+//       if (superAdmins.length > 0) {
+//         // Collect items for email
+//         const [actionItems, ongoingTasks, completedTasks] = await Promise.all([
+//           ActionItem.findAll({ where: { reportId: report.id, userId } }),
+//           OngoingTask.findAll({ where: { reportId: report.id, userId } }),
+//           CompletedTask.findAll({ where: { reportId: report.id, userId } }),
+//         ]);
+//         await Promise.all(
+//           superAdmins.map((superAdmin) =>
+//             sendReportNotification(
+//               report,
+//               user,
+//               superAdmin,
+//               actionItems.map((x) => x.description),
+//               ongoingTasks.map((x) => x.description),
+//               completedTasks.map((x) => x.description)
+//             )
+//           )
+//         );
+//       }
+//     } catch (emailError) {
+//       console.error("Email notification failed after submit:", emailError);
+//     }
+//   }
+
+//   res.status(200).json({
+//     code: 200,
+//     status: true,
+//     message: "Draft submitted successfully",
+//     report: {
+//       id: report.id,
+//       status: report.status,
+//       submittedAt: report.submittedAt,
+//     },
+//   });
+// });
+
 export const submitDraft = TryCatchFunction(async (req, res) => {
   const { reportId } = req.params;
   const userId = req.user;
@@ -480,6 +544,7 @@ export const submitDraft = TryCatchFunction(async (req, res) => {
     WeeklyReport.findOne({ where: { id: reportId, userId } }),
     User.findByPk(userId),
   ]);
+
   if (!report) throw new ErrorClass("Draft report not found", 404);
   if (report.status !== "draft")
     throw new ErrorClass("Report is not a draft", 400);
@@ -490,101 +555,165 @@ export const submitDraft = TryCatchFunction(async (req, res) => {
     OngoingTask.count({ where: { reportId: report.id, userId } }),
     CompletedTask.count({ where: { reportId: report.id, userId } }),
   ]);
+
   if (aiCount + ogCount + cmCount === 0) {
     throw new ErrorClass("At least one task is required to submit", 400);
   }
 
-  await report.update({ status: "submitted", submittedAt: new Date() });
+  const transaction = await Sequelize.transaction();
 
-  if (isAdmin(user)) {
-    try {
-      const superAdmins = await getSuperAdminUsers();
-      if (superAdmins.length > 0) {
-        // Collect items for email
-        const [actionItems, ongoingTasks, completedTasks] = await Promise.all([
-          ActionItem.findAll({ where: { reportId: report.id, userId } }),
-          OngoingTask.findAll({ where: { reportId: report.id, userId } }),
-          CompletedTask.findAll({ where: { reportId: report.id, userId } }),
-        ]);
-        await Promise.all(
-          superAdmins.map((superAdmin) =>
-            sendReportNotification(
-              report,
-              user,
-              superAdmin,
-              actionItems.map((x) => x.description),
-              ongoingTasks.map((x) => x.description),
-              completedTasks.map((x) => x.description)
+  try {
+    // Get all items from the draft
+    const [actionItems, ongoingTasks, completedTasks] = await Promise.all([
+      ActionItem.findAll({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+      OngoingTask.findAll({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+      CompletedTask.findAll({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+    ]);
+
+    // Create new submitted report
+    const submittedReport = await WeeklyReport.create(
+      {
+        userId,
+        department: report.department,
+        status: "submitted",
+        submittedAt: new Date(),
+        lastSavedAt: new Date(),
+      },
+      { transaction }
+    );
+
+    // Create new items for the submitted report
+    const createPromises = [];
+
+    if (actionItems.length > 0) {
+      createPromises.push(
+        Promise.all(
+          actionItems.map((item) =>
+            ActionItem.create(
+              {
+                userId,
+                reportId: submittedReport.id,
+                department: item.department,
+                description: item.description,
+              },
+              { transaction }
             )
           )
-        );
-      }
-    } catch (emailError) {
-      console.error("Email notification failed after submit:", emailError);
+        )
+      );
     }
+
+    if (ongoingTasks.length > 0) {
+      createPromises.push(
+        Promise.all(
+          ongoingTasks.map((task) =>
+            OngoingTask.create(
+              {
+                userId,
+                reportId: submittedReport.id,
+                department: task.department,
+                description: task.description,
+              },
+              { transaction }
+            )
+          )
+        )
+      );
+    }
+
+    if (completedTasks.length > 0) {
+      createPromises.push(
+        Promise.all(
+          completedTasks.map((task) =>
+            CompletedTask.create(
+              {
+                userId,
+                reportId: submittedReport.id,
+                department: task.department,
+                description: task.description,
+              },
+              { transaction }
+            )
+          )
+        )
+      );
+    }
+
+    if (createPromises.length > 0) {
+      await Promise.all(createPromises);
+    }
+
+    // Delete all items from the original draft
+    await Promise.all([
+      ActionItem.destroy({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+      OngoingTask.destroy({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+      CompletedTask.destroy({
+        where: { reportId: report.id, userId },
+        transaction,
+      }),
+    ]);
+
+    // Delete the draft report
+    await WeeklyReport.destroy({
+      where: { id: report.id, userId },
+      transaction,
+    });
+
+    // Send notifications if admin
+    if (isAdmin(user)) {
+      try {
+        const superAdmins = await getSuperAdminUsers();
+        if (superAdmins.length > 0) {
+          await Promise.all(
+            superAdmins.map((superAdmin) =>
+              sendReportNotification(
+                submittedReport,
+                user,
+                superAdmin,
+                actionItems.map((x) => x.description),
+                ongoingTasks.map((x) => x.description),
+                completedTasks.map((x) => x.description)
+              )
+            )
+          );
+        }
+      } catch (emailError) {
+        console.error("Email notification failed after submit:", emailError);
+      }
+    }
+
+    await transaction.commit();
+
+    res.status(200).json({
+      code: 200,
+      status: true,
+      message: "Draft submitted successfully",
+      report: {
+        id: submittedReport.id,
+        status: submittedReport.status,
+        submittedAt: submittedReport.submittedAt,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-
-  res.status(200).json({
-    code: 200,
-    status: true,
-    message: "Draft submitted successfully",
-    report: {
-      id: report.id,
-      status: report.status,
-      submittedAt: report.submittedAt,
-    },
-  });
 });
-
-// // List current user's drafts
-// export const getMyDrafts = TryCatchFunction(async (req, res) => {
-//   const userId = req.user;
-//   const page = parseInt(req.query.page) || 1;
-//   const limit = parseInt(req.query.limit) || 50;
-//   const offset = (page - 1) * limit;
-
-//   const { count, rows } = await WeeklyReport.findAndCountAll({
-//     where: { userId, status: "draft" },
-//     include: [
-//       {
-//         model: ActionItem,
-//         required: false,
-//         attributes: ["id", "description", "createdAt"],
-//       },
-//       {
-//         model: OngoingTask,
-//         required: false,
-//         attributes: ["id", "description", "createdAt"],
-//       },
-//       {
-//         model: CompletedTask,
-//         required: false,
-//         attributes: ["id", "description", "createdAt"],
-//       },
-//     ],
-//     order: [["lastSavedAt", "DESC"]],
-//     limit,
-//     offset,
-//     distinct: true,
-//   });
-
-//   const totalPages = Math.ceil(count / limit);
-
-//   return res.status(200).json({
-//     code: 200,
-//     status: true,
-//     message: "Draft weekly reports retrieved successfully",
-//     data: rows,
-//     pagination: {
-//       currentPage: page,
-//       totalPages,
-//       totalDrafts: count,
-//       draftsPerPage: limit,
-//       hasNextPage: page < totalPages,
-//       hasPrevPage: page > 1,
-//     },
-//   });
-// });
 
 // Get a particular user's draft by user ID
 export const getMyDrafts = TryCatchFunction(async (req, res) => {
