@@ -283,7 +283,34 @@ export const createWeeklyReport = TryCatchFunction(async (req, res) => {
         );
       }
     } else {
-      // status === "submitted" - always create new submitted report
+      // status === "submitted"
+      // If a draft exists for this user, delete it (and its items) to avoid duplicates
+      const existingDrafts = await WeeklyReport.findAll({
+        where: { userId, status: "draft" },
+        transaction,
+      });
+
+      if (existingDrafts?.length) {
+        for (const draft of existingDrafts) {
+          await Promise.all([
+            ActionItem.destroy({
+              where: { reportId: draft.id, userId },
+              transaction,
+            }),
+            OngoingTask.destroy({
+              where: { reportId: draft.id, userId },
+              transaction,
+            }),
+            CompletedTask.destroy({
+              where: { reportId: draft.id, userId },
+              transaction,
+            }),
+          ]);
+          await draft.destroy({ transaction });
+        }
+      }
+
+      // Create a fresh submitted report
       report = await WeeklyReport.create(
         {
           userId,
