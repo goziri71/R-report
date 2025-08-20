@@ -1,4 +1,5 @@
 import { User } from "./auth/index.js";
+import { Task } from "./task/index.js";
 import { events } from "./events/index.js";
 import { Incident } from "./incedent/index.js";
 import {
@@ -40,6 +41,12 @@ const setupAssociations = () => {
   User.hasMany(ActionItem, { foreignKey: "userId" });
   User.hasMany(OngoingTask, { foreignKey: "userId" });
   User.hasMany(CompletedTask, { foreignKey: "userId" });
+
+  // Tasks associations (Kanban)
+  User.hasMany(Task, { foreignKey: "userId", as: "createdTasks" });
+  Task.belongsTo(User, { foreignKey: "userId", as: "creator" });
+  User.hasMany(Task, { foreignKey: "assigneeId", as: "assignedTasks" });
+  Task.belongsTo(User, { foreignKey: "assigneeId", as: "assignee" });
 };
 
 export default setupAssociations;
