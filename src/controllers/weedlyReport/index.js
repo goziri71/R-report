@@ -936,17 +936,25 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     CompletedTask: completedTasks,
   } = req.body;
 
+  if (!actionItems && !ongoingTasks && !completedTasks) {
+    throw new ErrorClass("At least one field is required to update", 400);
+  }
+
   const [currentUser, targetUserDetails] = await Promise.all([
     User.findByPk(currentUserId),
     User.findByPk(targetUser),
   ]);
+
   if (!currentUser) throw new ErrorClass("User not found", 404);
+
   if (currentUser.role !== "admin")
     throw new ErrorClass("Unauthorized user, admin only", 403);
+
   if (!targetUserDetails) throw new ErrorClass("Target user not found", 404);
+
   const transaction = await Sequelize.transaction();
-  const prepareBulkUpdate = async (Model, items, modelName) => {
-    if (!items?.length) return null;
+  const validateItemsExist = async (Model, items, modelName) => {
+    if (!items?.length) return [];
     const ids = items.map((item) => item.id);
     const count = await Model.count({
       where: { id: ids, userId: targetUser },
@@ -955,45 +963,54 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     if (count !== items.length) {
       throw new ErrorClass(`Some ${modelName} not found for this user`, 404);
     }
-    return items.map((item) => ({
-      id: item.id,
-      userId: targetUser,
-      description: item.description,
-      updatedAt: new Date(),
-    }));
+    return items;
   };
-  const [actionItemUpdates, ongoingTaskUpdates, completedTaskUpdates] =
+  const [validActionItems, validOngoingTasks, validCompletedTasks] =
     await Promise.all([
-      prepareBulkUpdate(ActionItem, actionItems, "action items"),
-      prepareBulkUpdate(OngoingTask, ongoingTasks, "ongoing tasks"),
-      prepareBulkUpdate(CompletedTask, completedTasks, "completed tasks"),
+      validateItemsExist(ActionItem, actionItems, "action items"),
+      validateItemsExist(OngoingTask, ongoingTasks, "ongoing tasks"),
+      validateItemsExist(CompletedTask, completedTasks, "completed tasks"),
     ]);
   const updatePromises = [];
-  if (actionItemUpdates) {
+  if (validActionItems.length) {
     updatePromises.push(
-      ActionItem.bulkCreate(actionItemUpdates, {
-        updateOnDuplicate: ["description", "updatedAt"],
-        transaction,
-      })
+      Promise.all(
+        validActionItems.map((item) =>
+          ActionItem.update(
+            { description: item.description, updatedAt: new Date() },
+            { where: { id: item.id, userId: targetUser }, transaction }
+          )
+        )
+      )
     );
   }
-  if (ongoingTaskUpdates) {
+  if (validOngoingTasks.length) {
     updatePromises.push(
-      OngoingTask.bulkCreate(ongoingTaskUpdates, {
-        updateOnDuplicate: ["description", "updatedAt"],
-        transaction,
-      })
+      Promise.all(
+        validOngoingTasks.map((item) =>
+          OngoingTask.update(
+            { description: item.description, updatedAt: new Date() },
+            { where: { id: item.id, userId: targetUser }, transaction }
+          )
+        )
+      )
     );
   }
-  if (completedTaskUpdates) {
+  if (validCompletedTasks.length) {
     updatePromises.push(
-      CompletedTask.bulkCreate(completedTaskUpdates, {
-        updateOnDuplicate: ["description", "updatedAt"],
-        transaction,
-      })
+      Promise.all(
+        validCompletedTasks.map((item) =>
+          CompletedTask.update(
+            { description: item.description, updatedAt: new Date() },
+            { where: { id: item.id, userId: targetUser }, transaction }
+          )
+        )
+      )
     );
   }
-  await Promise.all(updatePromises);
+  if (updatePromises.length) {
+    await Promise.all(updatePromises);
+  }
   await transaction.commit();
   res.status(200).json({
     code: 200,
