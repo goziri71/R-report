@@ -124,3 +124,31 @@ export const editeTask = TryCatchFunction(async (req, res) => {
     data: task,
   });
 });
+
+export const deleteTask = TryCatchFunction(async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    throw new ErrorClass("Task ID is required", 400);
+  }
+  const userId = req.user;
+  if (!userId) {
+    throw new ErrorClass("User ID is required", 400);
+  }
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new ErrorClass("User not found", 404);
+  }
+  const task = await Task.findByPk(id);
+  if (!task) {
+    throw new ErrorClass("Task not found", 404);
+  }
+  if (task.userId !== userId) {
+    throw new ErrorClass("Unauthorized", 403);
+  }
+  await task.destroy();
+  return res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Task deleted successfully",
+  });
+});
