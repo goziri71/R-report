@@ -43,10 +43,17 @@ const setupAssociations = () => {
   User.hasMany(CompletedTask, { foreignKey: "userId" });
 
   // Tasks associations (Kanban)
-  User.hasMany(Task, { foreignKey: "userId", as: "createdTasks" });
-  Task.belongsTo(User, { foreignKey: "userId", as: "creator" });
-  User.hasMany(Task, { foreignKey: "assigneeId", as: "assignedTasks" });
-  Task.belongsTo(User, { foreignKey: "assigneeId", as: "assignee" });
+  User.hasMany(Task, {
+    foreignKey: "userId",
+    as: "createdTasks",
+    onDelete: "CASCADE",
+  });
+  Task.belongsTo(User, {
+    foreignKey: "userId",
+    as: "creator",
+    onDelete: "CASCADE",
+  });
+  // Removed assignee relations as per current Task model (no assigneeId)
 };
 
 export default setupAssociations;
