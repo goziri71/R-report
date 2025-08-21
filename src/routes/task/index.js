@@ -1,8 +1,14 @@
 import { Router } from "express";
-import { createTask } from "../../controllers/task/index.js";
+import {
+  createTask,
+  editeTask,
+  getTasks,
+} from "../../controllers/task/index.js";
 import { authorize } from "../../middleware/authorize.js";
 const router = Router();
 
 router.post("/create-task", authorize, createTask);
+router.get("/get-tasks", authorize, getTasks);
+router.patch("/edit-task/:id", authorize, editeTask);
 
 export default router;

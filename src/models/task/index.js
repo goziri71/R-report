@@ -31,12 +31,18 @@ export const Task = db.define(
       allowNull: false,
       defaultValue: "to_do",
     },
+    weekKey: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
   },
   {
     indexes: [
       { fields: ["userId"] },
       { fields: ["status"] },
       { fields: ["priority"] },
+      { fields: ["weekKey"] },
+      { fields: ["userId", "weekKey"] },
     ],
   }
 );
