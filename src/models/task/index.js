@@ -35,6 +35,10 @@ export const Task = db.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    occupation: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     indexes: [

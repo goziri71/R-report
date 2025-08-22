@@ -15,7 +15,8 @@ const router = express.Router();
 router.post("/create-report", authorize, createWeeklyReport);
 router.patch("/drafts/:reportId", authorize, saveDraft);
 router.post("/drafts/:reportId/submit", authorize, submitDraft);
-router.get("/drafts/:userId", authorize, getMyDrafts);
+router.get("/my-drafts", authorize, getMyDrafts);
+router.get("/my-drafts/:targetUserId", authorize, getMyDrafts);
 router.get("/getAll-weeklyReport", authorize, getAllDepertmentReport);
 router.patch(
   "/editTarget-weeklyReport/:targetUser",
