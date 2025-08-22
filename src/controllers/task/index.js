@@ -63,10 +63,10 @@ export const getTasks = TryCatchFunction(async (req, res) => {
   }
   let tasks;
   if (user.role === "admin") {
-    tasks = await Task.findAll({ where: { occupation: "PRODUCT" } });
+    tasks = await Task.findAll();
   } else {
     tasks = await Task.findAll({
-      where: { userId, accupation: "PRODUCT" },
+      where: { userId },
     });
   }
 
