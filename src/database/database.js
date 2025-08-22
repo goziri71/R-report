@@ -1,37 +1,8 @@
-// import { Sequelize } from "sequelize";
-// import dotenv from "dotenv";
-// import { Config } from "../config/config.js";
-
-// dotenv.config();
-
-// const db = new Sequelize(
-//   Config.database.name,
-//   Config.database.username,
-//   Config.database.password,
-//   {
-//     host: Config.database.host,
-//     dialect: Config.database.dialect,
-//     logging: process.env.NODE_ENV === "development" ? console.log : false,
-//     dialectOptions: Config.database.dialectOptions,
-//     pool: Config.database.pool,
-//   }
-// );
-
-// export async function connectDB() {
-//   try {
-//     await db.authenticate();
-//     console.log("✅ Database connection established successfully.");
-//   } catch (error) {
-//     console.error("❌ Unable to connect to the database:", error);
-//   }
-// }
-
-// export default db;
-
 import { Sequelize } from "sequelize";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { Config } from "../config/config.js";
+// Avoid importing models here to prevent circular init errors; use raw queries for cleanup
 
 dotenv.config();
 
@@ -46,6 +17,7 @@ const db = new Sequelize(
     logging: process.env.NODE_ENV === "development" ? console.log : false,
     dialectOptions: Config.database.dialectOptions,
     pool: Config.database.pool,
+    logging: false,
   }
 );
 
@@ -76,7 +48,33 @@ export async function initializeDatabases() {
     console.log("🔄 Initializing databases...");
     await connectDB();
     await connectMongoDB();
-    await db.sync({ force: false });
+    // Pre-sync cleanup: orphan rows using raw SQL to avoid circular imports
+    try {
+      await db.query(
+        'DELETE FROM "ActionItems" ai WHERE NOT EXISTS (SELECT 1 FROM "Users" u WHERE u."id" = ai."userId")'
+      );
+      await db.query(
+        'DELETE FROM "OngoingTasks" og WHERE NOT EXISTS (SELECT 1 FROM "Users" u WHERE u."id" = og."userId")'
+      );
+      await db.query(
+        'DELETE FROM "CompletedTasks" ct WHERE NOT EXISTS (SELECT 1 FROM "Users" u WHERE u."id" = ct."userId")'
+      );
+      await db.query(
+        'DELETE FROM "ActionItems" ai WHERE NOT EXISTS (SELECT 1 FROM "WeeklyReports" wr WHERE wr."id" = ai."reportId")'
+      );
+      await db.query(
+        'DELETE FROM "OngoingTasks" og WHERE NOT EXISTS (SELECT 1 FROM "WeeklyReports" wr WHERE wr."id" = og."reportId")'
+      );
+      await db.query(
+        'DELETE FROM "CompletedTasks" ct WHERE NOT EXISTS (SELECT 1 FROM "WeeklyReports" wr WHERE wr."id" = ct."reportId")'
+      );
+    } catch (cleanupError) {
+      console.warn(
+        "⚠️ Pre-sync cleanup warning:",
+        cleanupError?.message || cleanupError
+      );
+    }
+    await db.sync({ alter: true });
     console.log("✅ All databases initialized successfully!");
   } catch (error) {
     console.error("❌ Database initialization failed:", error);

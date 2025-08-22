@@ -1,4 +1,5 @@
 import { User } from "./auth/index.js";
+import { Task } from "./task/index.js";
 import { events } from "./events/index.js";
 import { Incident } from "./incedent/index.js";
 import {
@@ -41,9 +42,16 @@ const setupAssociations = () => {
   User.hasMany(OngoingTask, { foreignKey: "userId" });
   User.hasMany(CompletedTask, { foreignKey: "userId" });
 
-  ActionItem.belongsTo(WeeklyReport, { foreignKey: "userId" });
-  OngoingTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
-  CompletedTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
+  User.hasMany(Task, {
+    foreignKey: "userId",
+    as: "createdTasks",
+    onDelete: "CASCADE",
+  });
+  Task.belongsTo(User, {
+    foreignKey: "userId",
+    as: "creator",
+    onDelete: "CASCADE",
+  }); 
 };
 
 export default setupAssociations;
