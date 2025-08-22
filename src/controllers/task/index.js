@@ -163,9 +163,19 @@ export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
   const tasks = await Task.findAll({
     where: {
       weekKey: currentWeekKey,
-      occupation: "product",
+      occupation: user.occupation,
     },
   });
+
+  // Debug: Let's see what tasks exist for current week
+  const allTasks = await Task.findAll({
+    where: { weekKey: currentWeekKey },
+    attributes: ["id", "title", "occupation", "weekKey"],
+  });
+
+  console.log("Current week key:", currentWeekKey);
+  console.log("All tasks for current week:", allTasks);
+  console.log("Product team tasks found:", tasks.length);
 
   if (!tasks || tasks.length === 0) {
     throw new ErrorClass("No tasks found for product team", 404);

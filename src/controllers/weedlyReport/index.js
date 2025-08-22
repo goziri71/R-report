@@ -677,42 +677,18 @@ export const submitDraft = TryCatchFunction(async (req, res) => {
   }
 });
 
-// Get a particular user's draft by user ID
+// Get current user's drafts
 export const getMyDrafts = TryCatchFunction(async (req, res) => {
-  const { userId: targetUserId } = req.params; // Get userId from URL params
   const currentUserId = req.user; // Current authenticated user
 
-  // Validate that the target user exists
-  const targetUser = await User.findByPk(targetUserId);
-  if (!targetUser) {
-    throw new ErrorClass("Target user not found", 404);
-  }
-
-  // Get the current user for authorization checks
+  // Get the current user
   const currentUser = await User.findByPk(currentUserId);
   if (!currentUser) {
-    throw new ErrorClass("Current user not found", 404);
-  }
-
-  // Authorization: Everyone can only view their own drafts
-  if (currentUserId !== parseInt(targetUserId)) {
-    if (currentUser.role === "user" || currentUser.role === "admin") {
-      throw new ErrorClass(
-        "Unauthorized: You can only view your own drafts",
-        403
-      );
-    }
-    // Only superadmin can view other users' drafts
-    if (currentUser.role !== "superadmin") {
-      throw new ErrorClass(
-        "Unauthorized: You can only view your own drafts",
-        403
-      );
-    }
+    throw new ErrorClass("User not found", 404);
   }
 
   const drafts = await WeeklyReport.findAll({
-    where: { userId: targetUserId, status: "draft" },
+    where: { userId: currentUserId, status: "draft" },
     include: [
       {
         model: ActionItem,
@@ -737,17 +713,20 @@ export const getMyDrafts = TryCatchFunction(async (req, res) => {
     order: [["lastSavedAt", "DESC"]],
   });
 
+  if (!drafts || drafts.length === 0)
+    throw new ErrorClass("No drafts found", 404);
+
   return res.status(200).json({
     code: 200,
     status: true,
     message: "Draft weekly reports retrieved successfully",
     data: {
       user: {
-        id: targetUser.id,
-        firstName: targetUser.firstName,
-        lastName: targetUser.lastName,
-        occupation: targetUser.occupation,
-        role: targetUser.role,
+        id: currentUser.id,
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        occupation: currentUser.occupation,
+        role: currentUser.role,
       },
       drafts: drafts.map((draft) => {
         const { User, ...rest } = draft.toJSON();
