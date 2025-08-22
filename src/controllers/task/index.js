@@ -181,7 +181,15 @@ export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("No tasks found for product team", 404);
   }
 
-  // Create weekly report
+  // Delete any existing draft for current user
+  await WeeklyReport.destroy({
+    where: {
+      userId,
+      status: "draft",
+    },
+  });
+
+  // Create new draft
   const weeklyReport = await WeeklyReport.create({
     userId,
     status: "draft",
