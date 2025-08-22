@@ -17,7 +17,7 @@ const messageSchema = new mongoose.Schema({
 
   messageType: {
     type: String,
-    enum: ["text", "image", "file", "system", "voice", "photo", "video"],
+    enum: ["text", "image", "file", "system", "voice"],
     required: true,
   },
 
@@ -28,12 +28,9 @@ const messageSchema = new mongoose.Schema({
 
   fileData: {
     filename: String,
-    originalName: String, // Original file name before sanitization
     size: Number,
     mimeType: String,
     url: String,
-    duration: Number, // For videos and voice notes (in seconds)
-    timestamp: Number, // Unix timestamp when file was created
   },
 
   mentions: [
@@ -105,7 +102,6 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ chatId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1 });
 messageSchema.index({ "mentions.userId": 1 });
-messageSchema.index({ messageType: 1 }); // Index for filtering by message type
 
 const Message = mongoose.model("Message", messageSchema);
 

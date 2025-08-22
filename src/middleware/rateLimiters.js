@@ -1,6 +1,8 @@
 import rateLimit from "express-rate-limit";
 import { rateLimitConfig } from "../config/rateLimitConfig.js";
 
+console.log("🔍 Rate limiter config:", rateLimitConfig);
+
 // Factory function to create express rate limiters
 const createRateLimit = (config) => {
   return rateLimit({
@@ -28,6 +30,7 @@ const createRateLimit = (config) => {
   });
 };
 
+// Express rate limiters - ONLY for auth
 export const rateLimiters = {
   global: createRateLimit(rateLimitConfig.global),
   auth: createRateLimit(rateLimitConfig.auth),

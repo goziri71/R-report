@@ -1,5 +1,4 @@
 import { User } from "./auth/index.js";
-import { Task } from "./task/index.js";
 import { events } from "./events/index.js";
 import { Incident } from "./incedent/index.js";
 import {
@@ -42,18 +41,9 @@ const setupAssociations = () => {
   User.hasMany(OngoingTask, { foreignKey: "userId" });
   User.hasMany(CompletedTask, { foreignKey: "userId" });
 
-  // Tasks associations (Kanban)
-  User.hasMany(Task, {
-    foreignKey: "userId",
-    as: "createdTasks",
-    onDelete: "CASCADE",
-  });
-  Task.belongsTo(User, {
-    foreignKey: "userId",
-    as: "creator",
-    onDelete: "CASCADE",
-  });
-  // Removed assignee relations as per current Task model (no assigneeId)
+  ActionItem.belongsTo(WeeklyReport, { foreignKey: "userId" });
+  OngoingTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
+  CompletedTask.belongsTo(WeeklyReport, { foreignKey: "userId" });
 };
 
 export default setupAssociations;

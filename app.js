@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { Config } from "./src/config/config.js";
-import { initializeDatabases } from "./src/database/database.js";
+import { connectDB, initializeDatabases } from "./src/database/database.js";
 import { ErrorHandlerMiddleware } from "./src/middleware/errorHandler.js";
 import { rateLimiters } from "./src/middleware/rateLimiters.js";
 import userRouter from "./src/routes/admin/users/index.js";
@@ -12,24 +12,17 @@ import adminEvent from "./src/routes/admin/event/index.js";
 import createWeeklyReport from "./src/routes/weeklyReport/index.js";
 import thirdPartyRoutes from "./src/routes/thirdpart/index.js";
 import chatRoutes from "./src/routes/chat/index.js";
-import taskRoutes from "./src/routes/task/index.js";
 import db from "./src/database/database.js";
 import setupAssociations from "./src/models/dbasociation.js";
 import http from "http"; // Import http to create the server for socket.io
 import { Server } from "socket.io"; // Import socket.io
 import { handleChatSocketEvents } from "./src/service/chatSocketHandler.js";
 import { User } from "./src/models/auth/index.js";
-import path from "path";
-import { fileURLToPath } from "url";
 
 const app = express();
 const port = Config.port;
 const server = http.createServer(app);
 const io = new Server(server);
-
-// Get current directory for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -39,7 +32,6 @@ app.use(
       "http://localhost:5174",
       "http://localhost:5173",
       "https://redbiller-work-neon.vercel.app",
-      "https://main.d5ival0pckjqv.amplifyapp.com",
     ],
     credentials: true,
   })
@@ -60,23 +52,6 @@ app.use("/api/v1/admin", adminEvent);
 app.use("/api/v1/user", createWeeklyReport);
 app.use("/api/v1/thirdparty", thirdPartyRoutes);
 app.use("/api/v1/chat", chatRoutes);
-app.use("/api/v1/task", taskRoutes);
-
-// Serve API documentation
-app.use("/docs", express.static("public"));
-app.get("/docs", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "swagger-ui.html"));
-});
-
-// Serve swagger.json for the documentation
-app.get("/swagger.json", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "swagger.json"));
-});
-
-// Redirect root to documentation
-app.get("/", (req, res) => {
-  res.redirect("/docs");
-});
 
 app.post("/api/subscribe", async (req, res) => {
   try {
@@ -117,6 +92,9 @@ app.use(ErrorHandlerMiddleware);
   try {
     await db.sync();
     await initializeDatabases();
+    // app.listen(port, () => {
+    //   console.log(`🚀 Server listening on port ${port}`);
+    // });
     server.listen(port, () => {
       console.log(`🚀 Server listening on port ${port}`);
     });

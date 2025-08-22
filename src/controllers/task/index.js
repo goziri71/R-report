@@ -9,13 +9,12 @@ const getCurrentWeekKey = () => {
   const d = new Date(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
   );
-  const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
-  d.setUTCDate(d.getUTCDate() - dayNum + 3); // shift to Thursday
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const diff = (d - firstThursday) / 86400000;
-  const week = 1 + Math.round((diff - 3) / 7);
+  d.setUTCDate(d.getUTCDate() + 4 - dayOfWeek);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+
   const year = d.getUTCFullYear();
-  return `${year}-W${String(week).padStart(2, "0")}`;
+  return `${year}-W${String(weekNumber).padStart(2, "0")}`;
 };
 
 export const createTask = TryCatchFunction(async (req, res) => {
@@ -62,10 +61,19 @@ export const getTasks = TryCatchFunction(async (req, res) => {
   if (!user) {
     throw new ErrorClass("User not found", 404);
   }
-  const tasks = await Task.findAll({ where: { userId } });
-  if (!tasks) {
+  let tasks;
+  if (user.role === "admin") {
+    tasks = await Task.findAll({ where: { occupation: "PRODUCT" } });
+  } else {
+    tasks = await Task.findAll({
+      where: { userId, accupation: "PRODUCT" },
+    });
+  }
+
+  if (!tasks || tasks.length === 0) {
     throw new ErrorClass("No tasks found", 404);
   }
+
   return res.status(200).json({
     code: 200,
     status: true,
@@ -89,26 +97,7 @@ export const editeTask = TryCatchFunction(async (req, res) => {
   if (task.userId !== userId) {
     throw new ErrorClass("Unauthorized", 403);
   }
-  //   // Validate provided fields
-  //   if (!title && !description && !priority && !status) {
-  //     throw new ErrorClass("At least one field is required to update", 400);
-  //   }
 
-  //   if (priority) {
-  //     const allowedPriorities = ["low", "medium", "high"];
-  //     if (!allowedPriorities.includes(priority)) {
-  //       throw new ErrorClass("Invalid priority", 400);
-  //     }
-  //   }
-
-  //   if (status) {
-  //     const allowedStatuses = ["to_do", "in_progress", "completed", "confirmed"];
-  //     if (!allowedStatuses.includes(status)) {
-  //       throw new ErrorClass("Invalid status", 400);
-  //     }
-  //   }
-
-  // Build update payload with only provided fields
   const updatePayload = {};
   if (title !== undefined) updatePayload.title = title;
   if (description !== undefined) updatePayload.description = description;

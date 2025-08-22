@@ -14,16 +14,11 @@ import {
   removeParticipant,
   updateNotificationSettings,
   markMessageAsRead,
-  upload,
-  uploadFile,
   getUnreadMessagesCount,
   subscribeToPush, // This should now work
   unsubscribeFromPush, // This should now work
 } from "../../controllers/chat/chat.controller.js";
 import { authorize } from "../../middleware/authorize.js";
-
-// Add this new route (place it before your existing routes)
-router.post("/upload-file", authorize, upload.single("file"), uploadFile);
 
 // Chat management routes
 router.post("/direct", authorize, createDirectMessage); // Create direct/individual chat

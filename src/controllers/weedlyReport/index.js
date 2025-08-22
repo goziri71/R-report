@@ -186,576 +186,338 @@ const isAdmin = (user) => {
 };
 
 export const createWeeklyReport = TryCatchFunction(async (req, res) => {
-  const {
-    ActionItem: actionItemsRaw,
-    OngoingTask: ongoingTasksRaw,
-    CompletedTask: completedTasksRaw,
-    status,
-  } = req.body;
-
-  const userId = req.user;
-  if (!userId) throw new ErrorClass("User authentication required", 401);
-
-  const userExists = await User.findByPk(userId);
-  if (!userExists) throw new ErrorClass("User not found", 404);
-
-  const actionItems = Array.isArray(actionItemsRaw)
-    ? actionItemsRaw
-    : actionItemsRaw
-    ? [actionItemsRaw]
-    : [];
-  const ongoingTasks = Array.isArray(ongoingTasksRaw)
-    ? ongoingTasksRaw
-    : ongoingTasksRaw
-    ? [ongoingTasksRaw]
-    : [];
-  const completedTasks = Array.isArray(completedTasksRaw)
-    ? completedTasksRaw
-    : completedTasksRaw
-    ? [completedTasksRaw]
-    : [];
-
-  const isDraft = status === "draft";
-
-  // For draft: allow empty payload. For submit: enforce at least one item
-  if (!isDraft) {
-    if (
-      actionItems.length === 0 &&
-      ongoingTasks.length === 0 &&
-      completedTasks.length === 0
-    ) {
-      throw new ErrorClass("At least one task is required", 400);
-    }
+  if (
+    !req.body ||
+    !req.body.ActionItem ||
+    !req.body.OngoingTask ||
+    !req.body.CompletedTask
+  ) {
+    throw new ErrorClass(
+      "ActionItem, OngoingTask, and CompletedTask are required",
+      400
+    );
   }
 
-  const transaction = await Sequelize.transaction();
+  let actionItems = req.body.ActionItem;
+  let ongoingTasks = req.body.OngoingTask;
+  let completedTasks = req.body.CompletedTask;
 
-  try {
-    let report;
-    let isUpdate = false;
+  actionItems = Array.isArray(actionItems) ? actionItems : [actionItems];
+  ongoingTasks = Array.isArray(ongoingTasks) ? ongoingTasks : [ongoingTasks];
+  completedTasks = Array.isArray(completedTasks)
+    ? completedTasks
+    : [completedTasks];
 
-    if (isDraft) {
-      // Check if user already has a draft report
-      const existingDraft = await WeeklyReport.findOne({
-        where: { userId, status: "draft" },
-        transaction,
+  const userId = req.user;
+  if (!userId) {
+    throw new ErrorClass("User authentication required", 401);
+  }
+  const userExists = await User.findByPk(userId);
+  if (!userExists) {
+    throw new ErrorClass("User not found", 404);
+  }
+  const department = userExists.occupation;
+  if (
+    actionItems.length === 0 &&
+    ongoingTasks.length === 0 &&
+    completedTasks.length === 0
+  ) {
+    throw new ErrorClass("At least one task is required", 400);
+  }
+
+  const report = await WeeklyReport.create({
+    userId,
+    department: userExists.occupation,
+    submittedAt: new Date(),
+  });
+
+  if (actionItems.length > 0) {
+    const actionPromises = actionItems.map((item) => {
+      return ActionItem.create({
+        userId: userId,
+        reportId: report.id,
+        department: userExists.occupation,
+        description: typeof item === "string" ? item : JSON.stringify(item),
       });
+    });
+    await Promise.all(actionPromises);
+  }
 
-      if (existingDraft) {
-        // Update existing draft
-        report = existingDraft;
-        isUpdate = true;
+  if (ongoingTasks.length > 0) {
+    const ongoingPromises = ongoingTasks.map((task) => {
+      return OngoingTask.create({
+        userId: userId,
+        reportId: report.id,
+        department: userExists.occupation,
+        description: typeof task === "string" ? task : JSON.stringify(task),
+      });
+    });
+    await Promise.all(ongoingPromises);
+  }
 
-        // Delete existing items for this draft
-        await Promise.all([
-          ActionItem.destroy({
-            where: { reportId: report.id, userId },
-            transaction,
-          }),
-          OngoingTask.destroy({
-            where: { reportId: report.id, userId },
-            transaction,
-          }),
-          CompletedTask.destroy({
-            where: { reportId: report.id, userId },
-            transaction,
-          }),
-        ]);
+  if (completedTasks.length > 0) {
+    const completedPromises = completedTasks.map((task) => {
+      return CompletedTask.create({
+        userId: userId,
+        reportId: report.id,
+        department,
+        description: typeof task === "string" ? task : JSON.stringify(task),
+      });
+    });
+    await Promise.all(completedPromises);
+  }
 
-        // Update the draft's lastSavedAt
-        await report.update(
-          {
-            lastSavedAt: new Date(),
-          },
-          { transaction }
+  if (isAdmin(userExists)) {
+    try {
+      const superAdmins = await getSuperAdminUsers();
+      if (superAdmins.length > 0) {
+        const emailPromises = superAdmins.map((superAdmin) =>
+          sendReportNotification(
+            report,
+            userExists,
+            superAdmin,
+            actionItems,
+            ongoingTasks,
+            completedTasks
+          )
+        );
+
+        await Promise.all(emailPromises);
+        console.log(
+          `Email notifications sent to ${superAdmins.length} super admin(s) for admin report submission`
         );
       } else {
-        // Create new draft
-        report = await WeeklyReport.create(
-          {
-            userId,
-            department: userExists.occupation,
-            status: "draft",
-            submittedAt: null,
-            lastSavedAt: new Date(),
-          },
-          { transaction }
-        );
+        console.warn("No super admin users found to send email notification");
       }
-    } else {
-      // status === "submitted"
-      // If a draft exists for this user, delete it (and its items) to avoid duplicates
-      const existingDrafts = await WeeklyReport.findAll({
-        where: { userId, status: "draft" },
-        transaction,
-      });
-
-      if (existingDrafts?.length) {
-        for (const draft of existingDrafts) {
-          await Promise.all([
-            ActionItem.destroy({
-              where: { reportId: draft.id, userId },
-              transaction,
-            }),
-            OngoingTask.destroy({
-              where: { reportId: draft.id, userId },
-              transaction,
-            }),
-            CompletedTask.destroy({
-              where: { reportId: draft.id, userId },
-              transaction,
-            }),
-          ]);
-          await draft.destroy({ transaction });
-        }
-      }
-
-      // Create a fresh submitted report
-      report = await WeeklyReport.create(
-        {
-          userId,
-          department: userExists.occupation,
-          status: "submitted",
-          submittedAt: new Date(),
-          lastSavedAt: new Date(),
-        },
-        { transaction }
+    } catch (emailError) {
+      console.error(
+        "Email notification failed, but report was created successfully:",
+        emailError
       );
     }
-
-    const createItem = (Model, item, reportId, department) =>
-      Model.create(
-        {
-          userId,
-          reportId,
-          department,
-          description: typeof item === "string" ? item : JSON.stringify(item),
-        },
-        { transaction }
-      );
-
-    // Create new items
-    const createPromises = [];
-
-    if (actionItems.length > 0) {
-      createPromises.push(
-        Promise.all(
-          actionItems.map((item) =>
-            createItem(ActionItem, item, report.id, userExists.occupation)
-          )
-        )
-      );
-    }
-
-    if (ongoingTasks.length > 0) {
-      createPromises.push(
-        Promise.all(
-          ongoingTasks.map((task) =>
-            createItem(OngoingTask, task, report.id, userExists.occupation)
-          )
-        )
-      );
-    }
-
-    if (completedTasks.length > 0) {
-      createPromises.push(
-        Promise.all(
-          completedTasks.map((task) =>
-            createItem(CompletedTask, task, report.id, userExists.occupation)
-          )
-        )
-      );
-    }
-
-    if (createPromises.length > 0) {
-      await Promise.all(createPromises);
-    }
-
-    // Send notifications only for submitted reports and only when author is admin
-    if (!isDraft && isAdmin(userExists)) {
-      try {
-        const superAdmins = await getSuperAdminUsers();
-        if (superAdmins.length > 0) {
-          await Promise.all(
-            superAdmins.map((superAdmin) =>
-              sendReportNotification(
-                report,
-                userExists,
-                superAdmin,
-                actionItems,
-                ongoingTasks,
-                completedTasks
-              )
-            )
-          );
-        }
-      } catch (emailError) {
-        console.error(
-          "Email notification failed, but report was created/updated successfully:",
-          emailError
-        );
-      }
-    }
-
-    await transaction.commit();
-
-    const message = isDraft
-      ? isUpdate
-        ? "Draft updated successfully"
-        : "Draft saved successfully"
-      : "Weekly Report submitted successfully";
-
-    res.status(isDraft && isUpdate ? 200 : 201).json({
-      code: isDraft && isUpdate ? 200 : 201,
-      status: "successful",
-      message,
-      report: {
-        id: report.id,
-        userId: report.userId,
-        department: report.department,
-        status: report.status,
-        submittedAt: report.submittedAt,
-        lastSavedAt: report.lastSavedAt,
-      },
-    });
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
   }
-});
-
-// Save or update an existing draft by ID (owner only)
-export const saveDraft = TryCatchFunction(async (req, res) => {
-  const { reportId } = req.params;
-  const {
-    ActionItem: actionItemsRaw,
-    OngoingTask: ongoingTasksRaw,
-    CompletedTask: completedTasksRaw,
-    meta,
-  } = req.body || {};
-  const userId = req.user;
-
-  const report = await WeeklyReport.findOne({
-    where: { id: reportId, userId },
-  });
-  if (!report) throw new ErrorClass("Draft report not found", 404);
-  if (report.status !== "draft")
-    throw new ErrorClass("Report is not a draft", 400);
-
-  // Update optional metadata
-  if (meta) {
-    await report.update({ ...meta, lastSavedAt: new Date() });
-  } else {
-    await report.update({ lastSavedAt: new Date() });
-  }
-
-  const actionItems = Array.isArray(actionItemsRaw)
-    ? actionItemsRaw
-    : actionItemsRaw
-    ? [actionItemsRaw]
-    : [];
-  const ongoingTasks = Array.isArray(ongoingTasksRaw)
-    ? ongoingTasksRaw
-    : ongoingTasksRaw
-    ? [ongoingTasksRaw]
-    : [];
-  const completedTasks = Array.isArray(completedTasksRaw)
-    ? completedTasksRaw
-    : completedTasksRaw
-    ? [completedTasksRaw]
-    : [];
-
-  // For simplicity: append new items provided on each save
-  const createItem = (Model, item) =>
-    Model.create({
-      userId,
-      reportId: report.id,
-      department: report.department,
-      description: typeof item === "string" ? item : JSON.stringify(item),
-    });
-
-  const ops = [];
-  if (actionItems.length > 0)
-    ops.push(Promise.all(actionItems.map((i) => createItem(ActionItem, i))));
-  if (ongoingTasks.length > 0)
-    ops.push(Promise.all(ongoingTasks.map((i) => createItem(OngoingTask, i))));
-  if (completedTasks.length > 0)
-    ops.push(
-      Promise.all(completedTasks.map((i) => createItem(CompletedTask, i)))
-    );
-
-  if (ops.length) await Promise.all(ops);
-
-  res.status(200).json({
-    code: 200,
-    status: true,
-    message: "Draft saved",
+  res.status(201).json({
+    code: 201,
+    status: "successful",
+    message: "Weekly Report created successfully",
     report: {
       id: report.id,
-      status: report.status,
-      lastSavedAt: report.lastSavedAt,
+      userId: report.userId,
+      department: report.department,
+      submittedAt: report.submittedAt,
     },
   });
 });
 
-export const submitDraft = TryCatchFunction(async (req, res) => {
-  const { reportId } = req.params;
-  const userId = req.user;
+// import { ErrorClass } from "../../utils/errorClass/index.js";
+// import { TryCatchFunction } from "../../utils/tryCatch/index.js";
+// import { User } from "../../models/auth/index.js";
+// import {
+//   WeeklyReport,
+//   ActionItem,
+//   OngoingTask,
+//   CompletedTask,
+// } from "../../models/weeklyAction/index.js";
+// import Sequelize from "../../database/database.js";
+// import { Op } from "sequelize";
 
-  const [report, user] = await Promise.all([
-    WeeklyReport.findOne({ where: { id: reportId, userId } }),
-    User.findByPk(userId),
-  ]);
+// export const createWeeklyReport = TryCatchFunction(async (req, res) => {
+//   if (
+//     !req.body ||
+//     !req.body.ActionItem ||
+//     !req.body.OngoingTask ||
+//     !req.body.CompletedTask
+//   ) {
+//     throw new ErrorClass(
+//       "ActionItem, OngoingTask, and CompletedTask are required",
+//       400
+//     );
+//   }
 
-  if (!report) throw new ErrorClass("Draft report not found", 404);
-  if (report.status !== "draft")
-    throw new ErrorClass("Report is not a draft", 400);
+//   let actionItems = req.body.ActionItem;
+//   let ongoingTasks = req.body.OngoingTask;
+//   let completedTasks = req.body.CompletedTask;
 
-  // Validate presence of at least one item
-  const [aiCount, ogCount, cmCount] = await Promise.all([
-    ActionItem.count({ where: { reportId: report.id, userId } }),
-    OngoingTask.count({ where: { reportId: report.id, userId } }),
-    CompletedTask.count({ where: { reportId: report.id, userId } }),
-  ]);
+//   actionItems = Array.isArray(actionItems) ? actionItems : [actionItems];
+//   ongoingTasks = Array.isArray(ongoingTasks) ? ongoingTasks : [ongoingTasks];
+//   completedTasks = Array.isArray(completedTasks)
+//     ? completedTasks
+//     : [completedTasks];
 
-  if (aiCount + ogCount + cmCount === 0) {
-    throw new ErrorClass("At least one task is required to submit", 400);
-  }
+//   const userId = req.user;
+//   if (!userId) {
+//     throw new ErrorClass("User authentication required", 401);
+//   }
+//   const userExists = await User.findByPk(userId);
+//   if (!userExists) {
+//     throw new ErrorClass("User not found", 404);
+//   }
 
-  const transaction = await Sequelize.transaction();
+//   const department = userExists.occupation;
 
-  try {
-    // Get all items from the draft
-    const [actionItems, ongoingTasks, completedTasks] = await Promise.all([
-      ActionItem.findAll({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-      OngoingTask.findAll({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-      CompletedTask.findAll({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-    ]);
+//   if (
+//     actionItems.length === 0 &&
+//     ongoingTasks.length === 0 &&
+//     completedTasks.length === 0
+//   ) {
+//     throw new ErrorClass("At least one task is required", 400);
+//   }
 
-    // Create new submitted report
-    const submittedReport = await WeeklyReport.create(
-      {
-        userId,
-        department: report.department,
-        status: "submitted",
-        submittedAt: new Date(),
-        lastSavedAt: new Date(),
-      },
-      { transaction }
-    );
+//   const report = await WeeklyReport.create({
+//     userId,
+//     department: userExists.occupation,
+//     submittedAt: new Date(),
+//   });
 
-    // Create new items for the submitted report
-    const createPromises = [];
+//   if (actionItems.length > 0) {
+//     const actionPromises = actionItems.map((item) => {
+//       return ActionItem.create({
+//         userId: userId,
+//         reportId: report.id,
+//         department: userExists.occupation,
+//         description: typeof item === "string" ? item : JSON.stringify(item),
+//       });
+//     });
+//     await Promise.all(actionPromises);
+//   }
 
-    if (actionItems.length > 0) {
-      createPromises.push(
-        Promise.all(
-          actionItems.map((item) =>
-            ActionItem.create(
-              {
-                userId,
-                reportId: submittedReport.id,
-                department: item.department,
-                description: item.description,
-              },
-              { transaction }
-            )
-          )
-        )
-      );
-    }
+//   if (ongoingTasks.length > 0) {
+//     const ongoingPromises = ongoingTasks.map((task) => {
+//       return OngoingTask.create({
+//         userId: userId,
+//         reportId: report.id,
+//         department: userExists.occupation,
+//         description: typeof task === "string" ? task : JSON.stringify(task),
+//       });
+//     });
+//     await Promise.all(ongoingPromises);
+//   }
 
-    if (ongoingTasks.length > 0) {
-      createPromises.push(
-        Promise.all(
-          ongoingTasks.map((task) =>
-            OngoingTask.create(
-              {
-                userId,
-                reportId: submittedReport.id,
-                department: task.department,
-                description: task.description,
-              },
-              { transaction }
-            )
-          )
-        )
-      );
-    }
+//   if (completedTasks.length > 0) {
+//     const completedPromises = completedTasks.map((task) => {
+//       return CompletedTask.create({
+//         userId: userId,
+//         reportId: report.id,
+//         department,
+//         description: typeof task === "string" ? task : JSON.stringify(task),
+//       });
+//     });
+//     await Promise.all(completedPromises);
+//   }
 
-    if (completedTasks.length > 0) {
-      createPromises.push(
-        Promise.all(
-          completedTasks.map((task) =>
-            CompletedTask.create(
-              {
-                userId,
-                reportId: submittedReport.id,
-                department: task.department,
-                description: task.description,
-              },
-              { transaction }
-            )
-          )
-        )
-      );
-    }
+//   res.status(201).json({
+//     code: 201,
+//     status: "successful",
+//     message: "Weekly Report created successfully",
+//     report: {
+//       id: report.id,
+//       userId: report.userId,
+//       department: report.department,
+//       submittedAt: report.submittedAt,
+//     },
+//   });
+// });
 
-    if (createPromises.length > 0) {
-      await Promise.all(createPromises);
-    }
+// export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
+//   const userId = req.user;
 
-    // Delete all items from the original draft
-    await Promise.all([
-      ActionItem.destroy({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-      OngoingTask.destroy({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-      CompletedTask.destroy({
-        where: { reportId: report.id, userId },
-        transaction,
-      }),
-    ]);
+//   const currentUser = await User.findByPk(userId);
+//   if (!currentUser) {
+//     throw new ErrorClass("User not found", 404);
+//   }
 
-    // Delete the draft report
-    await WeeklyReport.destroy({
-      where: { id: report.id, userId },
-      transaction,
-    });
+//   const page = parseInt(req.query.page) || 1;
+//   const limit = parseInt(req.query.limit) || 100;
+//   const offset = (page - 1) * limit;
 
-    // Send notifications if admin
-    if (isAdmin(user)) {
-      try {
-        const superAdmins = await getSuperAdminUsers();
-        if (superAdmins.length > 0) {
-          await Promise.all(
-            superAdmins.map((superAdmin) =>
-              sendReportNotification(
-                submittedReport,
-                user,
-                superAdmin,
-                actionItems.map((x) => x.description),
-                ongoingTasks.map((x) => x.description),
-                completedTasks.map((x) => x.description)
-              )
-            )
-          );
-        }
-      } catch (emailError) {
-        console.error("Email notification failed after submit:", emailError);
-      }
-    }
+//   if (page < 1) {
+//     throw new ErrorClass("Page number must be greater than 0", 400);
+//   }
+//   if (limit < 1 || limit > 100) {
+//     throw new ErrorClass("Limit must be between 1 and 100", 400);
+//   }
 
-    await transaction.commit();
+//   const queryOptions = {
+//     where: {},
+//     include: [
+//       {
+//         model: User,
+//         attributes: ["id", "firstName", "lastName", "occupation", "role"],
+//       },
+//       {
+//         model: ActionItem,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: OngoingTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//       {
+//         model: CompletedTask,
+//         required: false,
+//         attributes: ["id", "description", "createdAt"],
+//       },
+//     ],
+//     order: [["submittedAt", "DESC"]],
+//     limit,
+//     offset,
+//     distinct: true,
+//   };
 
-    res.status(200).json({
-      code: 200,
-      status: true,
-      message: "Draft submitted successfully",
-      report: {
-        id: submittedReport.id,
-        status: submittedReport.status,
-        submittedAt: submittedReport.submittedAt,
-      },
-    });
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
-});
+//   if (currentUser.role === "admin") {
+//     queryOptions.where.department = currentUser.occupation;
+//     queryOptions.include[0].where = { occupation: currentUser.occupation };
+//   } else if (currentUser.role === "user") {
+//     queryOptions.where.userId = userId;
+//   } else {
+//     throw new ErrorClass("Unauthorized role", 403);
+//   }
 
-// Get a particular user's draft by user ID
-export const getMyDrafts = TryCatchFunction(async (req, res) => {
-  const { userId: targetUserId } = req.params; // Get userId from URL params
-  const currentUserId = req.user; // Current authenticated user
+//   const { count: totalReports, rows: reports } =
+//     await WeeklyReport.findAndCountAll(queryOptions);
 
-  // Validate that the target user exists
-  const targetUser = await User.findByPk(targetUserId);
-  if (!targetUser) {
-    throw new ErrorClass("Target user not found", 404);
-  }
+//   const totalPages = Math.ceil(totalReports / limit);
+//   const hasNextPage = page < totalPages;
+//   const hasPrevPage = page > 1;
 
-  // Get the current user for authorization checks
-  const currentUser = await User.findByPk(currentUserId);
-  if (!currentUser) {
-    throw new ErrorClass("Current user not found", 404);
-  }
+//   let responseData;
+//   if (currentUser.role === "user") {
+//     responseData = {
+//       user: {
+//         id: currentUser.id,
+//         firstName: currentUser.firstName,
+//         lastName: currentUser.lastName,
+//         occupation: currentUser.occupation,
+//         role: currentUser.role,
+//       },
+//       reports: reports.map((report) => {
+//         const { User, ...rest } = report.toJSON();
+//         return rest;
+//       }),
+//     };
+//   } else {
+//     responseData = reports;
+//   }
 
-  // Authorization: Everyone can only view their own drafts
-  if (currentUserId !== parseInt(targetUserId)) {
-    if (currentUser.role === "user" || currentUser.role === "admin") {
-      throw new ErrorClass(
-        "Unauthorized: You can only view your own drafts",
-        403
-      );
-    }
-    // Only superadmin can view other users' drafts
-    if (currentUser.role !== "superadmin") {
-      throw new ErrorClass(
-        "Unauthorized: You can only view your own drafts",
-        403
-      );
-    }
-  }
-
-  const drafts = await WeeklyReport.findAll({
-    where: { userId: targetUserId, status: "draft" },
-    include: [
-      {
-        model: ActionItem,
-        required: false,
-        attributes: ["id", "description", "createdAt"],
-      },
-      {
-        model: OngoingTask,
-        required: false,
-        attributes: ["id", "description", "createdAt"],
-      },
-      {
-        model: CompletedTask,
-        required: false,
-        attributes: ["id", "description", "createdAt"],
-      },
-      {
-        model: User,
-        attributes: ["id", "firstName", "lastName", "occupation", "role"],
-      },
-    ],
-    order: [["lastSavedAt", "DESC"]],
-  });
-
-  return res.status(200).json({
-    code: 200,
-    status: true,
-    message: "Draft weekly reports retrieved successfully",
-    data: {
-      user: {
-        id: targetUser.id,
-        firstName: targetUser.firstName,
-        lastName: targetUser.lastName,
-        occupation: targetUser.occupation,
-        role: targetUser.role,
-      },
-      drafts: drafts.map((draft) => {
-        const { User, ...rest } = draft.toJSON();
-        return rest;
-      }),
-    },
-  });
-});
+//   return res.status(200).json({
+//     code: 200,
+//     status: "successful",
+//     message: "Weekly Reports retrieved successfully",
+//     data: responseData,
+//     pagination: {
+//       currentPage: page,
+//       totalPages,
+//       totalReports,
+//       reportsPerPage: limit,
+//       hasNextPage,
+//       hasPrevPage,
+//       nextPage: hasNextPage ? page + 1 : null,
+//       prevPage: hasPrevPage ? page - 1 : null,
+//     },
+//   });
+// });
 
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
@@ -774,7 +536,7 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("Limit must be between 1 and 100", 400);
 
   const queryOptions = {
-    where: { status: "submitted" },
+    where: {},
     include: [
       {
         model: User,
@@ -862,6 +624,17 @@ export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   });
 });
 
+// export const getAllAdminReport = TryCatchFunction(async (req, res) => {
+//   const currentUserId = req.user;
+//   const currentUser = await User.findByPk(currentUserId);
+//   if (!currentUser) {
+//     throw new ErrorClass("user not found", 404);
+//   }
+//   if (currentUser.role !== "superAdmin") {
+//     throw new ErrorClass("unauthorized user, SuperAdmin only", 403);
+//   }
+// });
+
 export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
   const currentUserId = req.user;
   const { targetUser } = req.params;
@@ -871,25 +644,17 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     CompletedTask: completedTasks,
   } = req.body;
 
-  if (!actionItems && !ongoingTasks && !completedTasks) {
-    throw new ErrorClass("At least one field is required to update", 400);
-  }
-
   const [currentUser, targetUserDetails] = await Promise.all([
     User.findByPk(currentUserId),
     User.findByPk(targetUser),
   ]);
-
   if (!currentUser) throw new ErrorClass("User not found", 404);
-
   if (currentUser.role !== "admin")
     throw new ErrorClass("Unauthorized user, admin only", 403);
-
   if (!targetUserDetails) throw new ErrorClass("Target user not found", 404);
-
   const transaction = await Sequelize.transaction();
-  const validateItemsExist = async (Model, items, modelName) => {
-    if (!items?.length) return [];
+  const prepareBulkUpdate = async (Model, items, modelName) => {
+    if (!items?.length) return null;
     const ids = items.map((item) => item.id);
     const count = await Model.count({
       where: { id: ids, userId: targetUser },
@@ -898,54 +663,45 @@ export const editeWeeklyReport = TryCatchFunction(async (req, res) => {
     if (count !== items.length) {
       throw new ErrorClass(`Some ${modelName} not found for this user`, 404);
     }
-    return items;
+    return items.map((item) => ({
+      id: item.id,
+      userId: targetUser,
+      description: item.description,
+      updatedAt: new Date(),
+    }));
   };
-  const [validActionItems, validOngoingTasks, validCompletedTasks] =
+  const [actionItemUpdates, ongoingTaskUpdates, completedTaskUpdates] =
     await Promise.all([
-      validateItemsExist(ActionItem, actionItems, "action items"),
-      validateItemsExist(OngoingTask, ongoingTasks, "ongoing tasks"),
-      validateItemsExist(CompletedTask, completedTasks, "completed tasks"),
+      prepareBulkUpdate(ActionItem, actionItems, "action items"),
+      prepareBulkUpdate(OngoingTask, ongoingTasks, "ongoing tasks"),
+      prepareBulkUpdate(CompletedTask, completedTasks, "completed tasks"),
     ]);
   const updatePromises = [];
-  if (validActionItems.length) {
+  if (actionItemUpdates) {
     updatePromises.push(
-      Promise.all(
-        validActionItems.map((item) =>
-          ActionItem.update(
-            { description: item.description, updatedAt: new Date() },
-            { where: { id: item.id, userId: targetUser }, transaction }
-          )
-        )
-      )
+      ActionItem.bulkCreate(actionItemUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
     );
   }
-  if (validOngoingTasks.length) {
+  if (ongoingTaskUpdates) {
     updatePromises.push(
-      Promise.all(
-        validOngoingTasks.map((item) =>
-          OngoingTask.update(
-            { description: item.description, updatedAt: new Date() },
-            { where: { id: item.id, userId: targetUser }, transaction }
-          )
-        )
-      )
+      OngoingTask.bulkCreate(ongoingTaskUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
     );
   }
-  if (validCompletedTasks.length) {
+  if (completedTaskUpdates) {
     updatePromises.push(
-      Promise.all(
-        validCompletedTasks.map((item) =>
-          CompletedTask.update(
-            { description: item.description, updatedAt: new Date() },
-            { where: { id: item.id, userId: targetUser }, transaction }
-          )
-        )
-      )
+      CompletedTask.bulkCreate(completedTaskUpdates, {
+        updateOnDuplicate: ["description", "updatedAt"],
+        transaction,
+      })
     );
   }
-  if (updatePromises.length) {
-    await Promise.all(updatePromises);
-  }
+  await Promise.all(updatePromises);
   await transaction.commit();
   res.status(200).json({
     code: 200,

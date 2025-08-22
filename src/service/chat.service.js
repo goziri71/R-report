@@ -125,72 +125,12 @@ export class ChatService {
     return chat;
   }
 
-  // async getUserChats(userId) {
-  //   const chats = await Chat.find({
-  //     "participants.userId": userId,
-  //     "participants.isActive": true,
-  //     status: "active",
-  //     lastMessageId: { $exists: true },
-  //   }).sort({ updatedAt: -1 });
-
-  //   // Transform chats with additional user info
-  //   return Promise.all(
-  //     chats.map(async (chat) => {
-  //       const participant = chat.participants.find(
-  //         (p) => p.userId.toString() === userId
-  //       );
-  //       const unreadCount = await this.getUnreadMessagesCount(chat._id, userId);
-  //       const currentUser = await User.findByPk(userId, {
-  //         attributes: ["id", "firstName", "lastName"],
-  //       });
-
-  //       // FIXED: Handle group chats properly
-  //       let recipientData = null;
-  //       if (chat.chatType === "individual") {
-  //         const recipientParticipant = chat.participants.find(
-  //           (p) => p.userId.toString() !== userId.toString()
-  //         );
-  //         const recipientId = recipientParticipant?.userId;
-
-  //         if (recipientId) {
-  //           recipientData = await User.findByPk(recipientId, {
-  //             attributes: ["id", "firstName", "lastName"],
-  //           });
-  //         }
-  //       }
-
-  //       const chatObj = chat.toObject();
-
-  //       if (chat.chatType === "individual" && recipientData) {
-  //         chatObj.metadata = {
-  //           ...chatObj.metadata,
-  //           senderId: currentUser.id,
-  //           senderName: `${currentUser.firstName} ${currentUser.lastName}`,
-  //           recipientId: recipientData.id,
-  //           recipientName: `${recipientData.firstName} ${recipientData.lastName}`,
-  //         };
-  //       } else {
-  //         // For group chats, just add sender info
-  //         chatObj.metadata = {
-  //           ...chatObj.metadata,
-  //           senderId: currentUser.id,
-  //           senderName: `${currentUser.firstName} ${currentUser.lastName}`,
-  //         };
-  //       }
-
-  //       chatObj.unreadCount = unreadCount;
-  //       chatObj.lastSeen = participant?.lastSeen;
-  //       console.log(chatObj);
-  //       return chatObj;
-  //     })
-  //   );
-  // }
-
   async getUserChats(userId) {
     const chats = await Chat.find({
       "participants.userId": userId,
       "participants.isActive": true,
       status: "active",
+      lastMessageId: { $exists: true },
     }).sort({ updatedAt: -1 });
 
     // Transform chats with additional user info
@@ -204,13 +144,7 @@ export class ChatService {
           attributes: ["id", "firstName", "lastName"],
         });
 
-        // Fetch the last message
-        let lastMessage = null;
-        if (chat.lastMessageId) {
-          lastMessage = await Message.findById(chat.lastMessageId);
-        }
-
-        // Handle group chats properly
+        // FIXED: Handle group chats properly
         let recipientData = null;
         if (chat.chatType === "individual") {
           const recipientParticipant = chat.participants.find(
@@ -247,10 +181,7 @@ export class ChatService {
         chatObj.unreadCount = unreadCount;
         chatObj.lastSeen = participant?.lastSeen;
 
-        return {
-          ...chatObj,
-          lastMessage: lastMessage,
-        };
+        return chatObj;
       })
     );
   }
@@ -326,19 +257,10 @@ export class ChatService {
     console.log("💾 Message saved with ID:", message._id);
 
     // FIXED: Use proper MongoDB syntax for Chat model
-    // await Chat.findByIdAndUpdate(chatId, {
-    //   lastMessageId: message._id,
-    //   updatedAt: new Date(),
-    // });
-
-    await Chat.findByIdAndUpdate(
-      chatId,
-      {
-        lastMessageId: message._id,
-        updatedAt: new Date(),
-      },
-      { new: true } // Optional: returns the updated document
-    );
+    await Chat.findByIdAndUpdate(chatId, {
+      lastMessageId: message._id,
+      updatedAt: new Date(),
+    });
 
     // Increment unread count for all participants except sender
     const updateResult = await Chat.updateOne(
