@@ -192,9 +192,6 @@ export const deleteTask = TryCatchFunction(async (req, res) => {
   if (!task) {
     throw new ErrorClass("Task not found", 404);
   }
-  if (task.userId !== userId) {
-    throw new ErrorClass("Unauthorized", 403);
-  }
   const userFullName = user.firstName + " " + user.lastName;
   if (task.userId === userId || task.assignedBy === userFullName) {
     await task.destroy();
