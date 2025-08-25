@@ -63,6 +63,64 @@ export const createTask = TryCatchFunction(async (req, res) => {
   });
 });
 
+export const assignTask = TryCatchFunction(async (req, res) => {
+  const { title, description, priority, status } = req.body;
+  const { recipientId } = req.params;
+  const userId = req.user;
+  const user = await User.findByPk(userId);
+  if (!user) {
+    throw new ErrorClass("User not found", 404);
+  }
+  if (user.role !== "admin") {
+    throw new ErrorClass("Only admins can assign tasks", 403);
+  }
+  if (!title || !description || !priority || !status) {
+    throw new ErrorClass("All fields are required", 400);
+  }
+  if (priority !== "low" && priority !== "medium" && priority !== "high") {
+    throw new ErrorClass("Invalid priority", 400);
+  }
+  if (
+    status !== "to_do" &&
+    status !== "in_progress" &&
+    status !== "completed" &&
+    status !== "confirmed"
+  ) {
+    throw new ErrorClass("Invalid status", 400);
+  }
+
+  if (!recipientId) {
+    throw new ErrorClass("Recipient ID is required", 400);
+  }
+
+  const recipient = await User.findByPk(recipientId);
+  if (!recipient) {
+    throw new ErrorClass("Recipient not found", 404);
+  } else if (recipient.occupation !== user.occupation) {
+    throw new ErrorClass("You can only assign tasks to your own team", 403);
+  }
+
+  const weekKey = getCurrentWeekKey();
+
+  const task = await Task.create({
+    userId: recipientId,
+    title,
+    description,
+    priority,
+    status,
+    weekKey,
+    occupation: recipient.occupation,
+    assignedBy: user.firstName + " " + user.lastName,
+  });
+
+  return res.status(201).json({
+    code: 201,
+    status: true,
+    message: "Task assigned successfully",
+    data: task,
+  });
+});
+
 export const getTasks = TryCatchFunction(async (req, res) => {
   const userId = req.user;
   const user = await User.findByPk(userId);
@@ -137,12 +195,17 @@ export const deleteTask = TryCatchFunction(async (req, res) => {
   if (task.userId !== userId) {
     throw new ErrorClass("Unauthorized", 403);
   }
-  await task.destroy();
-  return res.status(200).json({
-    code: 200,
-    status: true,
-    message: "Task deleted successfully",
-  });
+  const userFullName = user.firstName + " " + user.lastName;
+  if (task.userId === userId || task.assignedBy === userFullName) {
+    await task.destroy();
+    return res.status(200).json({
+      code: 200,
+      status: true,
+      message: "Task deleted successfully",
+    });
+  } else {
+    throw new ErrorClass("You are not authorized to delete this task", 403);
+  }
 });
 
 export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
