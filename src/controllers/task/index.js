@@ -101,7 +101,7 @@ export const assignTask = TryCatchFunction(async (req, res) => {
   }
 
   const weekKey = getCurrentWeekKey();
-
+  const userFullName = user.firstName + " " + user.lastName;
   const task = await Task.create({
     userId: recipientId,
     title,
@@ -110,7 +110,7 @@ export const assignTask = TryCatchFunction(async (req, res) => {
     status,
     weekKey,
     occupation: recipient.occupation,
-    assignedBy: user.firstName + " " + user.lastName,
+    assignedBy: userFullName,
   });
 
   return res.status(201).json({
