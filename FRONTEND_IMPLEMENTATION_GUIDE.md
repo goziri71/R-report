@@ -1,83 +1,800 @@
-# Frontend Implementation Guide - Unified Media Upload
+# Frontend Implementation Guide - Complete API Reference
 
-## 🎯 **What Your Frontend Needs to Do**
+## 🎯 **API Base URL**
 
-Your frontend will have **one simple file input** that handles photos, videos, and files automatically. Here's exactly how to implement it:
-
-## 📁 **1. HTML Structure**
-
-Add this to your chat interface:
-
-```html
-<!-- File upload section -->
-<div class="media-upload-section">
-  <!-- Hidden file input -->
-  <input
-    type="file"
-    id="mediaInput"
-    accept="image/*,video/*,*/*"
-    style="display: none;"
-  />
-
-  <!-- Upload button -->
-  <button
-    type="button"
-    class="upload-btn"
-    onclick="document.getElementById('mediaInput').click()"
-  >
-    📁 Send Media
-  </button>
-
-  <!-- Upload progress container -->
-  <div id="uploadProgress" class="upload-progress-container"></div>
-</div>
-
-<!-- Chat messages container -->
-<div id="chatMessages" class="chat-messages"></div>
+```
+Base URL: http://localhost:4000/api/v1
+Production: https://your-domain.com/api/v1
 ```
 
-## 🔧 **2. JavaScript Implementation**
+## 🔐 **Authentication**
 
-Add this JavaScript to your existing socket connection:
+All endpoints (except login and third-party) require Authorization header:
 
 ```javascript
-// === UNIFIED MEDIA UPLOAD SYSTEM ===
+headers: {
+  'Authorization': `Bearer ${authToken}`,
+  'Content-Type': 'application/json'
+}
+```
 
-// 1. File input event listener
+---
+
+## 📚 **Complete API Endpoints**
+
+### 🔑 **Authentication Endpoints**
+
+**Base Path: `/api/v1/auth`**
+
+#### 1. Login User
+
+```javascript
+POST /api/v1/auth/login-user
+Body: {
+  "email_address": "user@example.com",
+  "password": "password123"
+}
+Response: {
+  "status": true,
+  "code": 200,
+  "message": "Login successful",
+  "data": {
+    "user": { id, email, firstName, lastName, role, occupation },
+    "authToken": "jwt_token_here"
+  }
+}
+```
+
+#### 2. Get Current User
+
+```javascript
+GET /api/v1/auth/current-user
+Headers: { Authorization: "Bearer token" }
+Response: {
+  "status": true,
+  "data": { id, email, firstName, lastName, role, occupation }
+}
+```
+
+#### 3. Update User Details (Admin Only)
+
+```javascript
+PATCH /api/v1/auth/update-userdetails-admin/:id
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "firstName": "John",
+  "lastName": "Doe",
+  "occupation": "product",
+  "role": "admin"
+}
+```
+
+---
+
+### 👥 **User Management Endpoints**
+
+**Base Path: `/api/v1`**
+
+#### 1. Get All Users (Admin)
+
+```javascript
+GET /api/v1/users
+Headers: { Authorization: "Bearer token" }
+Response: {
+  "status": true,
+  "data": [
+    { id, email, firstName, lastName, role, occupation, isActive }
+  ]
+}
+```
+
+#### 2. Delete User (Admin)
+
+```javascript
+DELETE /api/v1/admin/user-delete/:id
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 3. Update User Status (Admin)
+
+```javascript
+PATCH /api/v1/admin/user-accountStat/:userId/:userStat
+Headers: { Authorization: "Bearer token" }
+// userStat: "active" or "inactive"
+```
+
+#### 4. Get Single User Details
+
+```javascript
+GET /api/v1/single-user/details/:id
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 5. Update User Role (Admin)
+
+```javascript
+PATCH /api/v1/user-role/:userId
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "role": "admin" // or "user", "superadmin"
+}
+```
+
+---
+
+### 📋 **Task Management Endpoints**
+
+**Base Path: `/api/v1/task`**
+
+#### 1. Create Task
+
+```javascript
+POST /api/v1/task/create-task
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "title": "Task title",
+  "description": "Task description",
+  "priority": "high", // "low", "medium", "high"
+  "status": "to_do" // "to_do", "in_progress", "completed", "confirmed"
+}
+Response: {
+  "code": 201,
+  "status": true,
+  "message": "Task created successfully",
+  "data": { task_object }
+}
+```
+
+#### 2. Get Tasks
+
+```javascript
+GET /api/v1/task/get-tasks
+Headers: { Authorization: "Bearer token" }
+Response: {
+  "code": 200,
+  "status": true,
+  "message": "Tasks retrieved successfully",
+  "data": [{ task_objects }]
+}
+```
+
+#### 3. Edit Task
+
+```javascript
+PATCH /api/v1/task/edit-task/:id
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "title": "Updated title",
+  "description": "Updated description",
+  "priority": "medium",
+  "status": "confirmed" // This triggers email to admins
+}
+Response: {
+  "code": 200,
+  "status": true,
+  "message": "Task updated successfully",
+  "data": { updated_task }
+}
+```
+
+#### 4. Delete Task
+
+```javascript
+DELETE /api/v1/task/delete-task/:id
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 5. Assign Task (Admin Only)
+
+```javascript
+POST /api/v1/task/assign-task/:recipientId
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "title": "Assigned task",
+  "description": "Task description",
+  "priority": "high",
+  "status": "to_do"
+}
+```
+
+#### 6. Convert Tasks to Weekly Report (Admin Only)
+
+```javascript
+POST /api/v1/task/task-to-weekly-report
+Headers: { Authorization: "Bearer token" }
+Response: {
+  "status": true,
+  "message": "Weekly report created successfully",
+  "data": { "reportId": 123 }
+}
+```
+
+---
+
+### 📊 **Weekly Report Endpoints**
+
+**Base Path: `/api/v1/user`**
+
+#### 1. Create Weekly Report
+
+```javascript
+POST /api/v1/user/create-report
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "ActionItem": ["Task 1", "Task 2"],
+  "OngoingTask": ["Ongoing 1", "Ongoing 2"],
+  "CompletedTask": ["Completed 1", "Completed 2"],
+  "status": "submitted" // or "draft"
+}
+```
+
+#### 2. Save Draft
+
+```javascript
+PATCH /api/v1/user/drafts/:reportId
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "ActionItem": ["Updated task"],
+  "OngoingTask": ["Updated ongoing"],
+  "CompletedTask": ["Updated completed"]
+}
+```
+
+#### 3. Submit Draft
+
+```javascript
+POST /api/v1/user/drafts/:reportId/submit
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 4. Get My Drafts
+
+```javascript
+GET / api / v1 / user / my - drafts;
+Headers: {
+  Authorization: "Bearer token";
+}
+```
+
+#### 5. Get All Department Reports (Admin)
+
+```javascript
+GET / api / v1 / user / getAll - weeklyReport;
+Headers: {
+  Authorization: "Bearer token";
+}
+```
+
+#### 6. Edit Weekly Report (Admin)
+
+```javascript
+PATCH /api/v1/user/editTarget-weeklyReport/:targetUser
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 7. Delete Weekly Report (Admin)
+
+```javascript
+DELETE /api/v1/user/weekly-reports/:targetUser/:reportid
+Headers: { Authorization: "Bearer token" }
+```
+
+---
+
+### 🚨 **Incident Reporting Endpoints**
+
+**Base Path: `/api/v1/incident`**
+
+#### 1. Submit Incident Report
+
+```javascript
+POST /api/v1/incident/user/report
+Headers: { Authorization: "Bearer token" }
+Content-Type: multipart/form-data
+FormData: {
+  "message": "Incident description",
+  "subject": "Incident subject",
+  "photo": file, // Optional
+  "voiceNote": file // Optional
+}
+Response: {
+  "code": 201,
+  "status": true,
+  "message": "Incident report submitted successfully",
+  "data": { incident_object }
+}
+```
+
+#### 2. Get Current User (Duplicate)
+
+```javascript
+GET / api / v1 / incident / current / user;
+Headers: {
+  Authorization: "Bearer token";
+}
+```
+
+---
+
+### 📑 **Report Management Endpoints**
+
+**Base Path: `/api/v1/report`**
+
+#### 1. Get All Reports (Admin)
+
+```javascript
+GET /api/v1/report/admin-get/all-report
+Headers: { Authorization: "Bearer token" }
+Response: {
+  "status": true,
+  "data": [{ incident_reports }]
+}
+```
+
+#### 2. Delete Incident Report (Admin)
+
+```javascript
+DELETE /api/v1/report/admin-delete/incidentReport/:id
+Headers: { Authorization: "Bearer token" }
+```
+
+---
+
+### 📅 **Event Management Endpoints**
+
+**Base Path: `/api/v1/admin`**
+
+#### 1. Create Event (Admin Only)
+
+```javascript
+POST /api/v1/admin/create-event
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "eventTitle": "Event Title",
+  "eventDescription": "Event Description",
+  "eventDate": "05152025", // MMDDYYYY format
+  "eventTime": "9:00 AM" // HH:MM AM/PM format
+}
+Response: {
+  "code": 201,
+  "status": "successful",
+  "data": { event_object }
+}
+```
+
+#### 2. Get All Events
+
+```javascript
+GET /api/v1/admin/get-all/event
+Headers: { Authorization: "Bearer token" }
+Query Parameters: ?page=1&limit=10
+Response: {
+  "status": true,
+  "data": [{ event_objects }]
+}
+```
+
+#### 3. Update Event (Admin Only)
+
+```javascript
+PATCH /api/v1/admin/update-event/:id
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "eventTitle": "Updated Title",
+  "eventDescription": "Updated Description",
+  "eventDate": "06152025",
+  "eventTime": "2:00 PM"
+}
+```
+
+#### 4. Delete Event (Admin Only)
+
+```javascript
+DELETE /api/v1/admin/delete-event/:id
+Headers: { Authorization: "Bearer token" }
+```
+
+---
+
+### 💬 **Chat Endpoints**
+
+**Base Path: `/api/v1/chat`**
+
+#### 1. Upload File
+
+```javascript
+POST /api/v1/chat/upload-file
+Headers: { Authorization: "Bearer token" }
+Content-Type: multipart/form-data
+FormData: {
+  "file": file_object
+}
+```
+
+#### 2. Create Direct Chat
+
+```javascript
+POST /api/v1/chat/direct
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "participants": [userId1, userId2]
+}
+```
+
+#### 3. Create Group Chat
+
+```javascript
+POST /api/v1/chat/group
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "name": "Group Name",
+  "participants": [userId1, userId2, userId3]
+}
+```
+
+#### 4. Get User Chats
+
+```javascript
+GET / api / v1 / chat / user;
+Headers: {
+  Authorization: "Bearer token";
+}
+```
+
+#### 5. Get Chat Messages
+
+```javascript
+GET /api/v1/chat/:chatId/messages
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 6. Get Unread Messages Count
+
+```javascript
+GET /api/v1/chat/:chatId/unread-count
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 7. Send Message
+
+```javascript
+POST /api/v1/chat/:chatId/message
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "content": "Message content",
+  "messageType": "text" // "text", "photo", "video", "file", "voice"
+}
+```
+
+#### 8. Edit Message
+
+```javascript
+PATCH /api/v1/chat/message/:messageId
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "content": "Updated message content"
+}
+```
+
+#### 9. Delete Message
+
+```javascript
+DELETE /api/v1/chat/message/:messageId
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 10. Mark Message as Read
+
+```javascript
+POST /api/v1/chat/message/:messageId/read
+Headers: { Authorization: "Bearer token" }
+```
+
+#### 11. Add Reaction
+
+```javascript
+POST /api/v1/chat/message/:messageId/reaction
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "emoji": "👍"
+}
+```
+
+#### 12. Remove Reaction
+
+```javascript
+DELETE /api/v1/chat/message/:messageId/reaction
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "emoji": "👍"
+}
+```
+
+#### 13. Add Participant (Group Chat)
+
+```javascript
+POST /api/v1/chat/:chatId/participants
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "userId": 123
+}
+```
+
+#### 14. Remove Participant (Group Chat)
+
+```javascript
+DELETE /api/v1/chat/:chatId/participants
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "userId": 123
+}
+```
+
+#### 15. Update Notification Settings
+
+```javascript
+PUT /api/v1/chat/:chatId/notifications
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "muted": true // or false
+}
+```
+
+#### 16. Subscribe to Push Notifications
+
+```javascript
+POST /api/v1/chat/push/subscribe
+Headers: { Authorization: "Bearer token" }
+Body: {
+  "subscription": {
+    "endpoint": "...",
+    "keys": { "p256dh": "...", "auth": "..." }
+  }
+}
+```
+
+#### 17. Unsubscribe from Push Notifications
+
+```javascript
+DELETE / api / v1 / chat / push / unsubscribe;
+Headers: {
+  Authorization: "Bearer token";
+}
+```
+
+---
+
+### 🔌 **Third Party Endpoints**
+
+**Base Path: `/api/v1/thirdparty`**
+
+#### 1. Test Login (No Auth Required)
+
+```javascript
+POST / api / v1 / thirdparty / test / login - pupil;
+Body: {
+  // Third party login data
+}
+```
+
+---
+
+### 📱 **Push Notification Endpoints**
+
+**Base Path: `/api`**
+
+#### 1. Subscribe to Push Notifications
+
+```javascript
+POST /api/subscribe
+Body: {
+  "userId": 123,
+  "subscription": {
+    "endpoint": "...",
+    "keys": { "p256dh": "...", "auth": "..." }
+  }
+}
+```
+
+#### 2. Unsubscribe from Push Notifications
+
+```javascript
+POST /api/unsubscribe
+Body: {
+  "userId": 123
+}
+```
+
+---
+
+## 🔌 **Socket.IO Events**
+
+### Connection
+
+```javascript
+const socket = io("http://localhost:4000");
+
+// Join user to their personal room
+socket.emit("join_user_room", { userId: currentUserId });
+
+// Join specific chat room
+socket.emit("join_chat", { chatId: "chat_123" });
+```
+
+### Chat Events
+
+```javascript
+// Send media (photos, videos, files)
+socket.emit("send_media", {
+  chatId: "chat_123",
+  fileData: "base64_data",
+  fileName: "image.jpg",
+  mimeType: "image/jpeg",
+  fileSize: 123456,
+  duration: 0, // for videos/audio
+  tempId: "temp_123",
+});
+
+// Listen for new messages
+socket.on("new_message", (message) => {
+  console.log("New message:", message);
+  // Handle different message types: text, photo, video, file, voice
+});
+
+// Listen for media upload progress
+socket.on("media_progress", (data) => {
+  console.log(`Upload progress: ${data.progress}% - ${data.message}`);
+});
+
+// Listen for successful media delivery
+socket.on("media_delivered", (data) => {
+  console.log("Media uploaded successfully:", data);
+});
+
+// Listen for media upload errors
+socket.on("media_error", (data) => {
+  console.error("Media upload failed:", data.error);
+});
+
+// Listen for message reactions
+socket.on("message_reaction", (data) => {
+  console.log("Reaction added/removed:", data);
+});
+
+// Listen for message edits
+socket.on("message_edited", (data) => {
+  console.log("Message edited:", data);
+});
+
+// Listen for message deletions
+socket.on("message_deleted", (data) => {
+  console.log("Message deleted:", data);
+});
+```
+
+---
+
+## 🎨 **Frontend Implementation Examples**
+
+### Authentication Setup
+
+```javascript
+class AuthService {
+  constructor() {
+    this.baseURL = "http://localhost:4000/api/v1";
+    this.token = localStorage.getItem("authToken");
+  }
+
+  async login(email, password) {
+    try {
+      const response = await fetch(`${this.baseURL}/auth/login-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email_address: email,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.status) {
+        this.token = data.data.authToken;
+        localStorage.setItem("authToken", this.token);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        return data;
+      }
+      throw new Error(data.message);
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
+  }
+
+  logout() {
+    this.token = null;
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+  }
+
+  getAuthHeaders() {
+    return {
+      Authorization: `Bearer ${this.token}`,
+      "Content-Type": "application/json",
+    };
+  }
+}
+```
+
+### Task Management
+
+```javascript
+class TaskService {
+  constructor(authService) {
+    this.auth = authService;
+    this.baseURL = "http://localhost:4000/api/v1/task";
+  }
+
+  async createTask(taskData) {
+    const response = await fetch(`${this.baseURL}/create-task`, {
+      method: "POST",
+      headers: this.auth.getAuthHeaders(),
+      body: JSON.stringify(taskData),
+    });
+    return response.json();
+  }
+
+  async getTasks() {
+    const response = await fetch(`${this.baseURL}/get-tasks`, {
+      headers: this.auth.getAuthHeaders(),
+    });
+    return response.json();
+  }
+
+  async updateTask(taskId, updates) {
+    const response = await fetch(`${this.baseURL}/edit-task/${taskId}`, {
+      method: "PATCH",
+      headers: this.auth.getAuthHeaders(),
+      body: JSON.stringify(updates),
+    });
+    return response.json();
+  }
+
+  async deleteTask(taskId) {
+    const response = await fetch(`${this.baseURL}/delete-task/${taskId}`, {
+      method: "DELETE",
+      headers: this.auth.getAuthHeaders(),
+    });
+    return response.json();
+  }
+}
+```
+
+### Media Upload for Chat
+
+```javascript
+// File input event listener
 document.getElementById("mediaInput").addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (file) {
-    handleFileUpload(file, currentChatId); // currentChatId should be your active chat ID
+    handleFileUpload(file, currentChatId);
   }
-  // Clear the input for next use
   event.target.value = "";
 });
 
-// 2. Unified file upload handler (Optimized for speed)
+// Unified file upload handler
 function handleFileUpload(file, chatId) {
-  console.log(
-    "📁 Processing file:",
-    file.name,
-    "Type:",
-    file.type,
-    "Size:",
-    file.size
-  );
-
   const reader = new FileReader();
   const tempId = Date.now().toString();
 
-  // Show upload progress
   showUploadProgress(tempId, "Starting upload...");
 
   reader.onload = async (e) => {
-    const base64Data = e.target.result.split(",")[1]; // Remove data URL prefix
-
-    // For videos, skip duration extraction for faster upload
-    // Duration can be extracted later if needed
+    const base64Data = e.target.result.split(",")[1];
     let duration = 0;
 
-    // Only extract duration for small videos (< 10MB) to avoid blocking
     if (file.type.startsWith("video/") && file.size < 10 * 1024 * 1024) {
       try {
         const video = document.createElement("video");
@@ -86,16 +803,10 @@ function handleFileUpload(file, chatId) {
           duration = video.duration;
           emitMediaUpload(base64Data, file, duration, chatId, tempId);
         };
-        video.onerror = () => {
-          // If duration extraction fails, continue without it
-          emitMediaUpload(base64Data, file, 0, chatId, tempId);
-        };
       } catch (error) {
-        // If duration extraction fails, continue without it
         emitMediaUpload(base64Data, file, 0, chatId, tempId);
       }
     } else {
-      // For large videos or non-video files, emit immediately
       emitMediaUpload(base64Data, file, 0, chatId, tempId);
     }
   };
@@ -103,16 +814,8 @@ function handleFileUpload(file, chatId) {
   reader.readAsDataURL(file);
 }
 
-// 3. Emit media upload to server
+// Emit media upload to server
 function emitMediaUpload(fileData, file, duration, chatId, tempId) {
-  console.log("🚀 Sending media to server:", {
-    fileName: file.name,
-    mimeType: file.type,
-    fileSize: file.size,
-    duration: duration,
-    tempId: tempId,
-  });
-
   socket.emit("send_media", {
     chatId: chatId,
     fileData: fileData,
@@ -123,477 +826,73 @@ function emitMediaUpload(fileData, file, duration, chatId, tempId) {
     tempId: tempId,
   });
 }
-
-// 4. Socket event listeners for media uploads
-socket.on("media_delivered", (data) => {
-  console.log("✅ Media uploaded successfully:", data);
-  hideUploadProgress(data.tempId);
-  showSuccessMessage(`${data.messageType} sent successfully!`);
-});
-
-socket.on("media_error", (data) => {
-  console.error("❌ Media upload failed:", data.error);
-  hideUploadProgress(data.tempId);
-  showErrorMessage("Failed to send media: " + data.error);
-});
-
-// NEW: Progress tracking for better UX
-socket.on("media_progress", (data) => {
-  console.log("📊 Upload progress:", data.progress + "% - " + data.message);
-  updateUploadProgress(data.tempId, data.progress, data.message);
-});
-
-// 5. Enhanced new_message handler for media types
-socket.on("new_message", (message) => {
-  console.log("🟢 New message received:", message);
-
-  // Handle different message types
-  switch (message.messageType) {
-    case "photo":
-      displayPhotoMessage(message);
-      break;
-    case "video":
-      displayVideoMessage(message);
-      break;
-    case "file":
-      displayFileMessage(message);
-      break;
-    case "voice":
-      displayVoiceMessage(message);
-      break;
-    case "text":
-    default:
-      displayTextMessage(message);
-      break;
-  }
-});
-
-// 6. Media display functions
-function displayPhotoMessage(message) {
-  const messageElement = document.createElement("div");
-  messageElement.className = "message photo-message";
-  messageElement.innerHTML = `
-    <div class="message-content">
-      <img src="${
-        message.fileData.url
-      }" alt="Photo" style="max-width: 300px; max-height: 300px; border-radius: 8px;" />
-      <div class="message-info">
-        <span class="sender">${message.sender?.firstName} ${
-    message.sender?.lastName
-  }</span>
-        <span class="timestamp">${new Date(
-          message.createdAt
-        ).toLocaleTimeString()}</span>
-      </div>
-    </div>
-  `;
-  appendMessageToChat(messageElement);
-}
-
-function displayVideoMessage(message) {
-  const messageElement = document.createElement("div");
-  messageElement.className = "message video-message";
-  messageElement.innerHTML = `
-    <div class="message-content">
-      <video controls style="max-width: 300px; max-height: 300px; border-radius: 8px;">
-        <source src="${message.fileData.url}" type="${
-    message.fileData.mimeType
-  }">
-        Your browser does not support the video tag.
-      </video>
-      <div class="message-info">
-        <span class="sender">${message.sender?.firstName} ${
-    message.sender?.lastName
-  }</span>
-        <span class="timestamp">${new Date(
-          message.createdAt
-        ).toLocaleTimeString()}</span>
-        ${
-          message.fileData.duration
-            ? `<span class="duration">${Math.round(
-                message.fileData.duration
-              )}s</span>`
-            : ""
-        }
-      </div>
-    </div>
-  `;
-  appendMessageToChat(messageElement);
-}
-
-function displayFileMessage(message) {
-  const messageElement = document.createElement("div");
-  messageElement.className = "message file-message";
-  messageElement.innerHTML = `
-    <div class="message-content">
-      <div class="file-attachment">
-        <div class="file-icon">📎</div>
-        <div class="file-info">
-          <div class="file-name">${
-            message.fileData.originalName || message.fileData.filename
-          }</div>
-          <div class="file-size">${formatFileSize(message.fileData.size)}</div>
-        </div>
-        <a href="${message.fileData.url}" download="${
-    message.fileData.originalName || message.fileData.filename
-  }" class="download-btn">Download</a>
-      </div>
-      <div class="message-info">
-        <span class="sender">${message.sender?.firstName} ${
-    message.sender?.lastName
-  }</span>
-        <span class="timestamp">${new Date(
-          message.createdAt
-        ).toLocaleTimeString()}</span>
-      </div>
-    </div>
-  `;
-  appendMessageToChat(messageElement);
-}
-
-function displayVoiceMessage(message) {
-  const messageElement = document.createElement("div");
-  messageElement.className = "message voice-message";
-  messageElement.innerHTML = `
-    <div class="message-content">
-      <div class="voice-attachment">
-        <div class="voice-icon">🎤</div>
-        <audio controls>
-          <source src="${message.fileData.url}" type="${
-    message.fileData.mimeType
-  }">
-          Your browser does not support the audio tag.
-        </audio>
-        <div class="duration">${Math.round(
-          message.fileData.duration || 0
-        )}s</div>
-      </div>
-      <div class="message-info">
-        <span class="sender">${message.sender?.firstName} ${
-    message.sender?.lastName
-  }</span>
-        <span class="timestamp">${new Date(
-          message.createdAt
-        ).toLocaleTimeString()}</span>
-      </div>
-    </div>
-  `;
-  appendMessageToChat(messageElement);
-}
-
-function displayTextMessage(message) {
-  const messageElement = document.createElement("div");
-  messageElement.className = "message text-message";
-  messageElement.innerHTML = `
-    <div class="message-content">
-      <div class="text">${message.content}</div>
-      <div class="message-info">
-        <span class="sender">${message.sender?.firstName} ${
-    message.sender?.lastName
-  }</span>
-        <span class="timestamp">${new Date(
-          message.createdAt
-        ).toLocaleTimeString()}</span>
-      </div>
-    </div>
-  `;
-  appendMessageToChat(messageElement);
-}
-
-// 7. Helper functions
-function appendMessageToChat(messageElement) {
-  const chatContainer = document.getElementById("chatMessages");
-  if (chatContainer) {
-    chatContainer.appendChild(messageElement);
-    chatContainer.scrollTop = chatContainer.scrollHeight; // Auto-scroll to bottom
-  }
-}
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
-
-function showUploadProgress(tempId, message) {
-  const progressContainer = document.getElementById("uploadProgress");
-  const progressElement = document.createElement("div");
-  progressElement.id = `progress-${tempId}`;
-  progressElement.className = "upload-progress";
-  progressElement.innerHTML = `
-    <div class="progress-content">
-      <div class="spinner"></div>
-      <span>${message}</span>
-    </div>
-  `;
-
-  if (progressContainer) {
-    progressContainer.appendChild(progressElement);
-  }
-}
-
-function hideUploadProgress(tempId) {
-  const progressElement = document.getElementById(`progress-${tempId}`);
-  if (progressElement) {
-    progressElement.remove();
-  }
-}
-
-// NEW: Update progress with percentage
-function updateUploadProgress(tempId, progress, message) {
-  const progressElement = document.getElementById(`progress-${tempId}`);
-  if (progressElement) {
-    progressElement.innerHTML = `
-      <div class="progress-content">
-        <div class="spinner"></div>
-        <span>${message} (${progress}%)</span>
-      </div>
-    `;
-  }
-}
-
-function showSuccessMessage(message) {
-  // You can use toast notifications, alerts, or custom UI
-  console.log("✅ " + message);
-  // Example: showToast(message, "success");
-}
-
-function showErrorMessage(message) {
-  // You can use toast notifications, alerts, or custom UI
-  console.error("❌ " + message);
-  // Example: showToast(message, "error");
-}
 ```
 
-## 🎨 **3. CSS Styling**
+---
 
-Add this CSS for a nice look:
+## 🎯 **Key Features Implemented**
 
-```css
-/* Media upload section */
-.media-upload-section {
-  padding: 10px;
-  border-top: 1px solid #eee;
-  background: #f9f9f9;
-}
+### ✅ **Task Management**
 
-.upload-btn {
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
+- Create, read, update, delete tasks
+- Task assignment (admin only)
+- Status tracking with email notifications
+- Priority levels and department-based filtering
+- Convert tasks to weekly reports
 
-.upload-btn:hover {
-  background: #0056b3;
-}
+### ✅ **Real-time Chat**
 
-/* Upload progress */
-.upload-progress-container {
-  margin-top: 10px;
-}
+- Direct and group messaging
+- File uploads (photos, videos, documents)
+- Message reactions and editing
+- Read receipts and notifications
+- Push notification support
 
-.upload-progress {
-  background: #e3f2fd;
-  border: 1px solid #2196f3;
-  border-radius: 4px;
-  padding: 8px 12px;
-  margin-bottom: 5px;
-  display: flex;
-  align-items: center;
-}
+### ✅ **Incident Reporting**
 
-.progress-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+- Submit incidents with photos and voice notes
+- Email notifications to all users
+- Admin can view and delete reports
 
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #2196f3;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
+### ✅ **Event Management**
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
+- Create company-wide events
+- Date/time validation
+- Admin-only event management
+- Pagination support
 
-/* Message styles */
-.message {
-  margin: 10px 0;
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 70%;
-}
+### ✅ **User Management**
 
-.message.sent {
-  background: #007bff;
-  color: white;
-  margin-left: auto;
-}
+- Role-based access control
+- Account activation/deactivation
+- Department-based permissions
+- Profile management
 
-.message.received {
-  background: #f1f1f1;
-  color: #333;
-}
+### ✅ **Weekly Reporting**
 
-.message-content {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
+- Draft and submit reports
+- Department-specific reporting
+- Admin oversight and editing
 
-.message-info {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  opacity: 0.8;
-}
+---
 
-/* File attachment styles */
-.file-attachment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
+## 🚀 **Getting Started Checklist**
 
-.file-icon {
-  font-size: 24px;
-}
+1. **Setup Authentication**: Implement login/logout functionality
+2. **Initialize Socket.IO**: Connect to real-time events
+3. **Create Services**: Build API service classes for each module
+4. **Handle Errors**: Implement proper error handling and user feedback
+5. **Add Loading States**: Show progress indicators for API calls
+6. **Implement Routing**: Set up navigation between different modules
+7. **Test Features**: Verify all endpoints work with your frontend
 
-.file-info {
-  flex: 1;
-}
+---
 
-.file-name {
-  font-weight: bold;
-  margin-bottom: 2px;
-}
+## 📱 **Mobile Considerations**
 
-.file-size {
-  font-size: 12px;
-  opacity: 0.8;
-}
+- All endpoints support CORS for cross-origin requests
+- File uploads work with mobile camera/gallery
+- Push notifications supported for real-time updates
+- Responsive design considerations for mobile UI
 
-.download-btn {
-  background: #28a745;
-  color: white;
-  text-decoration: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.download-btn:hover {
-  background: #218838;
-}
-
-/* Voice attachment styles */
-.voice-attachment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-.voice-icon {
-  font-size: 24px;
-}
-
-.duration {
-  font-size: 12px;
-  opacity: 0.8;
-}
-```
-
-## 🚀 **4. How It Works - Step by Step**
-
-### **User Experience:**
-
-1. User clicks "📁 Send Media" button
-2. File picker opens (accepts images, videos, documents)
-3. User selects any file
-4. System automatically detects file type and uploads
-5. Progress indicator shows during upload
-6. File appears in chat with appropriate display (image preview, video player, or download link)
-
-### **Technical Flow:**
-
-1. **File Selection**: `handleFileUpload()` is called
-2. **File Reading**: File is converted to base64
-3. **Video Duration**: If video, duration is extracted
-4. **Server Upload**: `socket.emit("send_media", ...)` sends to server
-5. **Auto-Detection**: Server determines file type from MIME type
-6. **Storage**: File uploaded to appropriate Supabase bucket
-7. **Message Creation**: Chat message created with file data
-8. **Real-Time Delivery**: Message broadcast to all chat participants
-9. **Display**: Frontend receives `new_message` and displays appropriately
-
-## 📱 **5. Integration with Your Existing Code**
-
-### **Add to your existing socket connection:**
-
-```javascript
-// Add these event listeners to your existing socket setup
-socket.on("media_delivered", handleMediaDelivered);
-socket.on("media_error", handleMediaError);
-socket.on("new_message", handleNewMessage); // Enhanced version
-```
-
-### **Add the file input to your HTML:**
-
-```html
-<!-- Add this near your existing chat input -->
-<input
-  type="file"
-  id="mediaInput"
-  accept="image/*,video/*,*/*"
-  style="display: none;"
-/>
-<button onclick="document.getElementById('mediaInput').click()">
-  📁 Send Media
-</button>
-```
-
-### **Add the JavaScript functions:**
-
-Copy all the JavaScript functions above into your existing script file.
-
-## 🎯 **6. Testing Your Implementation**
-
-1. **Test Photo Upload**: Select a .jpg or .png file
-2. **Test Video Upload**: Select a .mp4 or .mov file
-3. **Test File Upload**: Select a .pdf or .doc file
-4. **Test Real-Time**: Open chat in two browsers and verify delivery
-5. **Test Progress**: Verify upload progress indicators work
-6. **Test Error Handling**: Try uploading very large files
-
-## ✅ **What You Get**
-
-- **One Button**: Single upload button for all file types
-- **Auto-Detection**: No need to specify file type
-- **Real-Time**: Instant delivery to all chat participants
-- **Progress Tracking**: Visual feedback during uploads
-- **Error Handling**: Clear error messages
-- **Responsive Display**: Images show preview, videos play, files download
-
-Your frontend will now have a seamless media upload experience! 🎉
+This comprehensive guide covers all available API endpoints and provides practical implementation examples for your frontend development! 🎉

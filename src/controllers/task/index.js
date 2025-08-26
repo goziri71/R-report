@@ -28,21 +28,30 @@ const getCurrentWeekKey = () => {
 const sendTaskConfirmedEmails = async (task, actingUser) => {
   try {
     const department = task.occupation || actingUser.occupation;
+    console.log(`🔍 Searching for admins in department: ${department}`);
+
     const admins = await User.findAll({
       where: { role: "admin", occupation: department },
       attributes: ["firstName", "lastName", "email", "role", "occupation"],
     });
+
+    console.log(
+      `📋 Found ${admins.length} admins:`,
+      admins.map((a) => ({ email: a.email, dept: a.occupation }))
+    );
 
     const adminEmails = admins
       .map((u) => u.email)
       .filter((email) => email && email.trim() !== "");
 
     if (adminEmails.length === 0) {
-      console.warn("No admin emails found for task confirmation notice");
+      console.warn("❌ No admin emails found for task confirmation notice");
       return;
     }
 
-    const subject = `Task Confirmed: ${task.title}`;
+    console.log(`📧 Sending emails to: ${adminEmails.join(", ")}`);
+
+    const subject = `Task Completed: ${task.title}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #28a745;">Task Confirmed</h2>
@@ -65,20 +74,29 @@ const sendTaskConfirmedEmails = async (task, actingUser) => {
         html,
       };
 
-      await axios.post(
-        "https://api.proxy.account.redbiller.com/api/v1/resources/email/send",
-        payload,
-        {
-          timeout: 10000,
-          headers: {
-            "Content-Type": "application/json",
-            Key: "Email_deed4b7fdc471325783304fefbc2f574",
-          },
-        }
-      );
+      try {
+        await axios.post(
+          "https://api.proxy.account.redbiller.com/api/v1/resources/email/send",
+          payload,
+          {
+            timeout: 10000,
+            headers: {
+              "Content-Type": "application/json",
+              Key: "Email_deed4b7fdc471325783304fefbc2f574",
+            },
+          }
+        );
+        console.log(`✅ Email sent successfully to ${email}`);
+      } catch (error) {
+        console.error(`❌ Failed to send email to ${email}:`, error.message);
+        throw error;
+      }
     });
 
-    await Promise.allSettled(emailPromises);
+    const results = await Promise.allSettled(emailPromises);
+    const successful = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - successful;
+    console.log(`📊 Email summary: ${successful} sent, ${failed} failed`);
   } catch (err) {
     console.error("Failed to send task confirmed emails:", err.message);
   }
@@ -229,16 +247,34 @@ export const editeTask = TryCatchFunction(async (req, res) => {
   const previousStatus = task.status;
   await task.update(updatePayload);
 
-  if (
-    status !== undefined &&
-    status === "confirmed" &&
-    previousStatus !== "confirmed"
-  ) {
-    // Fire-and-forget; do not block response
-    sendTaskConfirmedEmails(task, user).catch((e) =>
-      console.error("Background task confirmation email failed:", e.message)
-    );
-  }
+  // if (
+  //   status !== undefined &&
+  //   status === "completed" &&
+  //   previousStatus !== "comfirmed"
+  // ) {
+  //   console.log(
+  //     `🎯 Task status changed to confirmed! Previous: ${previousStatus}, New: ${status}`
+  //   );
+  //   console.log(`📋 Task details:`, {
+  //     id: task.id,
+  //     title: task.title,
+  //     occupation: task.occupation,
+  //   });
+  //   console.log(`👤 User details:`, {
+  //     id: user.id,
+  //     occupation: user.occupation,
+  //     role: user.role,
+  //   });
+
+  //   // Fire-and-forget; do not block response
+  //   sendTaskConfirmedEmails(task, user).catch((e) =>
+  //     console.error("Background task confirmation email failed:", e.message)
+  //   );
+  // } else {
+  //   console.log(
+  //     `ℹ️ Email condition not met. Status: ${status}, Previous: ${previousStatus}`
+  //   );
+  // }
 
   return res.status(200).json({
     code: 200,
