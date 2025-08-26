@@ -19,7 +19,7 @@ export const events = db.define(
       allowNull: false,
     },
     eventDescription: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
     },
     eventDate: {

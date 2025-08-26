@@ -2,6 +2,7 @@ import { TryCatchFunction } from "../../utils/tryCatch/index.js";
 import { ErrorClass } from "../../utils/errorClass/index.js";
 import { Task } from "../../models/task/index.js";
 import { User } from "../../models/auth/index.js";
+import axios from "axios";
 import {
   WeeklyReport,
   ActionItem,
@@ -21,6 +22,66 @@ const getCurrentWeekKey = () => {
   const weekNumber = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
   const year = d.getUTCFullYear();
   return `${year}-W${String(weekNumber).padStart(2, "0")}`;
+};
+
+// Send email notifications to admins when a task is confirmed
+const sendTaskConfirmedEmails = async (task, actingUser) => {
+  try {
+    const department = task.occupation || actingUser.occupation;
+    const admins = await User.findAll({
+      where: { role: "admin", occupation: department },
+      attributes: ["firstName", "lastName", "email", "role", "occupation"],
+    });
+
+    const adminEmails = admins
+      .map((u) => u.email)
+      .filter((email) => email && email.trim() !== "");
+
+    if (adminEmails.length === 0) {
+      console.warn("No admin emails found for task confirmation notice");
+      return;
+    }
+
+    const subject = `Task Confirmed: ${task.title}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #28a745;">Task Confirmed</h2>
+        <p><strong>Title:</strong> ${task.title}</p>
+        <p><strong>Description:</strong> ${task.description || "-"}</p>
+        <p><strong>Priority:</strong> ${task.priority}</p>
+        <p><strong>Status:</strong> ${task.status}</p>
+        <p><strong>Confirmed by:</strong> ${actingUser.firstName || "User"} ${
+      actingUser.lastName || ""
+    }</p>
+        <p><strong>Department:</strong> ${task.occupation || "-"}</p>
+        <p style="margin-top: 16px; color: #6c757d; font-size: 12px;">This is an automated notification.</p>
+      </div>
+    `;
+
+    const emailPromises = adminEmails.map(async (email) => {
+      const payload = {
+        subject,
+        recipient: { name: "Admin", email_address: email },
+        html,
+      };
+
+      await axios.post(
+        "https://api.proxy.account.redbiller.com/api/v1/resources/email/send",
+        payload,
+        {
+          timeout: 10000,
+          headers: {
+            "Content-Type": "application/json",
+            Key: "Email_deed4b7fdc471325783304fefbc2f574",
+          },
+        }
+      );
+    });
+
+    await Promise.allSettled(emailPromises);
+  } catch (err) {
+    console.error("Failed to send task confirmed emails:", err.message);
+  }
 };
 
 export const createTask = TryCatchFunction(async (req, res) => {
@@ -165,7 +226,19 @@ export const editeTask = TryCatchFunction(async (req, res) => {
   if (priority !== undefined) updatePayload.priority = priority;
   if (status !== undefined) updatePayload.status = status;
 
+  const previousStatus = task.status;
   await task.update(updatePayload);
+
+  if (
+    status !== undefined &&
+    status === "confirmed" &&
+    previousStatus !== "confirmed"
+  ) {
+    // Fire-and-forget; do not block response
+    sendTaskConfirmedEmails(task, user).catch((e) =>
+      console.error("Background task confirmation email failed:", e.message)
+    );
+  }
 
   return res.status(200).json({
     code: 200,
