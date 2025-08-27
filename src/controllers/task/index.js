@@ -328,26 +328,27 @@ export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
 
   const currentWeekKey = getCurrentWeekKey();
 
-  // Get all tasks with occupation "product" for current week
-  const tasks = await Task.findAll({
+  const tasksForCurrentWeek = await Task.findAll({
     where: {
       weekKey: currentWeekKey,
       occupation: user.occupation,
+      status: ["confirmed"], // Only fetch completed or confirmed tasks for current week
     },
   });
 
-  // Debug: Let's see what tasks exist for current week
-  const allTasks = await Task.findAll({
-    where: { weekKey: currentWeekKey },
-    attributes: ["id", "title", "occupation", "weekKey"],
+  // Get all "to_do" and "in_progress" tasks for all time
+  const tasksForAllTime = await Task.findAll({
+    where: {
+      occupation: user.occupation,
+      status: ["to_do", "in_progress"], // Fetch "to_do" and "in_progress" tasks for all time
+    },
   });
 
-  console.log("Current week key:", currentWeekKey);
-  console.log("All tasks for current week:", allTasks);
-  console.log("Product team tasks found:", tasks.length);
+  // Get all tasks with occupation "product" for current week
+  const allTasks = [...tasksForAllTime, ...tasksForCurrentWeek];
 
-  if (!tasks || tasks.length === 0) {
-    throw new ErrorClass("No tasks found for product team", 404);
+  if (!allTasks || allTasks.length === 0) {
+    throw new ErrorClass("No tasks found for the product team", 404);
   }
 
   // Delete any existing draft for current user
@@ -365,28 +366,27 @@ export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
   });
 
   // Create report items using only task titles
-  for (const task of tasks) {
+  for (const task of allTasks) {
     switch (task.status) {
       case "to_do":
         await ActionItem.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.title,
+          description: task.description,
         });
         break;
       case "in_progress":
         await OngoingTask.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.title,
+          description: task.description,
         });
         break;
-      case "completed":
       case "confirmed":
         await CompletedTask.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.title,
+          description: task.description,
         });
         break;
     }
