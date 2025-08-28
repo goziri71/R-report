@@ -7,6 +7,7 @@ import {
   saveDraft,
   submitDraft,
   getMyDrafts,
+  deleteDraft,
 } from "../../controllers/weedlyReport/index.js";
 import { authorize } from "../../middleware/authorize.js";
 
@@ -27,5 +28,6 @@ router.delete(
   authorize,
   deleteWeeklyReport
 );
+router.delete("/delete-draft/:reportId", authorize, deleteDraft);
 
 export default router;
