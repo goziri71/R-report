@@ -736,6 +736,63 @@ export const getMyDrafts = TryCatchFunction(async (req, res) => {
   });
 });
 
+export const deleteDraft = TryCatchFunction(async (req, res) => {
+  const { reportId } = req.params;
+  const userId = req.user;
+
+  if (!reportId) {
+    throw new ErrorClass("Report ID is required", 400);
+  }
+
+  const currentUser = await User.findByPk(userId);
+  if (!currentUser) throw new ErrorClass("User not found", 404);
+
+  if (currentUser.role !== "admin")
+    throw new ErrorClass("Unauthorized user, admin only", 403);
+
+  // Find the weekly report
+  const report = await WeeklyReport.findByPk(reportId);
+  if (!report) {
+    throw new ErrorClass("Weekly report not found", 404);
+  }
+
+  // Validate ownership
+  if (report.userId !== userId) {
+    throw new ErrorClass("You can only delete your own reports", 403);
+  }
+
+  // Get counts of associated items for response
+  const [actionItemsCount, ongoingTasksCount, completedTasksCount] =
+    await Promise.all([
+      ActionItem.count({ where: { reportId: report.id } }),
+      OngoingTask.count({ where: { reportId: report.id } }),
+      CompletedTask.count({ where: { reportId: report.id } }),
+    ]);
+
+  // Delete all associated items first, then the report
+  await Promise.all([
+    ActionItem.destroy({ where: { reportId: report.id } }),
+    OngoingTask.destroy({ where: { reportId: report.id } }),
+    CompletedTask.destroy({ where: { reportId: report.id } }),
+    report.destroy(),
+  ]);
+
+  return res.status(200).json({
+    code: 200,
+    status: true,
+    message: "Weekly report and all associated items deleted successfully",
+    data: {
+      deleted: {
+        report: true,
+        actionItems: actionItemsCount,
+        ongoingTasks: ongoingTasksCount,
+        completedTasks: completedTasksCount,
+        totalItems: actionItemsCount + ongoingTasksCount + completedTasksCount,
+      },
+    },
+  });
+});
+
 export const getAllDepertmentReport = TryCatchFunction(async (req, res) => {
   const userId = req.user;
   const currentUser = await User.findByPk(userId);

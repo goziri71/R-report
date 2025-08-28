@@ -226,7 +226,7 @@ export const getTasks = TryCatchFunction(async (req, res) => {
 
 export const editeTask = TryCatchFunction(async (req, res) => {
   const { id } = req.params;
-  const { title, description, priority, status } = req.body;
+  const { title, description, priority, status, weekKey } = req.body;
   const userId = req.user;
   const user = await User.findByPk(userId);
   if (!user) {
@@ -243,7 +243,7 @@ export const editeTask = TryCatchFunction(async (req, res) => {
   if (description !== undefined) updatePayload.description = description;
   if (priority !== undefined) updatePayload.priority = priority;
   if (status !== undefined) updatePayload.status = status;
-
+  if (weekKey !== undefined) updatePayload.weekKey = weekKey;
   const previousStatus = task.status;
   await task.update(updatePayload);
 
