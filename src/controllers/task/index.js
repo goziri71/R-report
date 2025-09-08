@@ -208,7 +208,7 @@ export const getTasks = TryCatchFunction(async (req, res) => {
   }
 
   let tasks;
-  if (user.role === "admin") {
+  if (user.role === "admin" || user.role === "superadmin") {
     tasks = await Task.findAll();
   } else {
     tasks = await Task.findAll({ where: { userId } });
