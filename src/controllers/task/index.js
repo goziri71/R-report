@@ -372,21 +372,21 @@ export const taskToWeeklyReport = TryCatchFunction(async (req, res) => {
         await ActionItem.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.description,
+          description: `${task.title} - ${task.description}`,
         });
         break;
       case "in_progress":
         await OngoingTask.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.description,
+          description: `${task.title} - ${task.description}`,
         });
         break;
       case "confirmed":
         await CompletedTask.create({
           userId: task.userId,
           reportId: weeklyReport.id,
-          description: task.description,
+          description: `${task.title} - ${task.description}`,
         });
         break;
     }
