@@ -10,7 +10,6 @@ import incedentRoutes from "./src/routes/user/incident/index.js";
 import allusereport from "./src/routes/admin/users/getallreport.js";
 import adminEvent from "./src/routes/admin/event/index.js";
 import createWeeklyReport from "./src/routes/weeklyReport/index.js";
-import thirdPartyRoutes from "./src/routes/thirdpart/index.js";
 import chatRoutes from "./src/routes/chat/index.js";
 import taskRoutes from "./src/routes/task/index.js";
 import db from "./src/database/database.js";
@@ -58,7 +57,6 @@ app.use("/api/v1/incident", incedentRoutes);
 app.use("/api/v1/report", allusereport);
 app.use("/api/v1/admin", adminEvent);
 app.use("/api/v1/user", createWeeklyReport);
-app.use("/api/v1/thirdparty", thirdPartyRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/task", taskRoutes);
 

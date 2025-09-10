@@ -136,14 +136,14 @@
 import { ErrorClass } from "../../utils/errorClass/index.js";
 import { TryCatchFunction } from "../../utils/tryCatch/index.js";
 import { User } from "../../models/auth/index.js";
-import { loginFromAlpha } from "../../core/apiCalls.js";
+import { validateCrosslinkToken } from "../../core/apiCalls.js";
 import { AuthService } from "../../service/auth.service.js";
 import { Config } from "../../config/config.js";
 
 const authService = new AuthService();
 
 // Pre-compile validation rules
-const REQUIRED_LOGIN_FIELDS = ["email_address", "password"];
+const REQUIRED_LOGIN_FIELDS = ["token"];
 const UPDATABLE_FIELDS = [
   "firstName",
   "lastName",
@@ -157,11 +157,14 @@ const UPDATABLE_FIELDS = [
 ];
 
 export const loginUser = TryCatchFunction(async (req, res) => {
-  const { email_address, password } = req.body;
+  console.log("loginUser");
+  const { token } = req.body;
+
+  console.log(token);
 
   // Fast validation
-  const missingFields = REQUIRED_LOGIN_FIELDS.filter((field) =>
-    field === "email_address" ? !email_address : !password
+  const missingFields = REQUIRED_LOGIN_FIELDS.filter(
+    (field) => !req.body[field]
   );
 
   if (missingFields.length > 0) {
@@ -171,41 +174,63 @@ export const loginUser = TryCatchFunction(async (req, res) => {
     );
   }
 
-  // const currentUser = await User.findOne({
-  //   where: {
-  //     email: email_address,
-  //   },
-  // });
-
-  // console.log(currentUser);
-
-  // if (currentUser.isActive !== true) {
-  //   throw new ErrorClass(
-  //     "your active has been deactivated, kindly reach out to the admin of your department",
-  //     403
-  //   );
-  // }
-
-  // Call external API first (keeping original flow)
-  const data = await loginFromAlpha({ email_address, password });
-
+  // Validate crosslink token via third-party API (centralized helper)
+  const data = await validateCrosslinkToken({ token });
   console.log(data);
 
   if (data.status === 401) {
-    throw new ErrorClass("invalid password", 401);
+    throw new ErrorClass("invalid token", 401);
   }
 
   if (!data) {
     throw new ErrorClass("Service temporarily down", 500);
   }
 
+  // Normalize and validate third-party response (Redbiller crosslink)
+  const root = (data && data.data) || {};
+  const profile = root.profile || {};
+  const bio = profile.bio || {};
+  const kyc = profile.kyc || {};
+
+  const thirdPartyBillerId =
+    profile.redbiller_id || root.redbiller_id || root.billerId;
+  const thirdPartyEmail = profile.redbiller_id || root.email || null; // redbiller_id is email-like
+  const thirdPartyFirstName =
+    bio.first_name ||
+    kyc.first_name ||
+    root.firstName ||
+    profile.username ||
+    "User";
+  const thirdPartyLastName =
+    bio.last_name || kyc.last_name || root.lastName || "User";
+  const thirdPartyMiddleName =
+    bio.middle_name || kyc.middle_name || root.middleName || null;
+  const thirdPartyDob = bio.dob || kyc.dob || root.dob || null;
+  const thirdPartyNationality =
+    bio.nationality || kyc.nationality || root.nationality || "UNSPECIFIED";
+  const thirdPartyOccupation =
+    bio.occupation || kyc.occupation || root.occupation || "UNSPECIFIED";
+  const rawGender = (bio.gender || kyc.gender || root.gender || "OTHER")
+    .toString()
+    .toUpperCase();
+  const thirdPartyGender = ["MALE", "FEMALE", "OTHER"].includes(rawGender)
+    ? rawGender
+    : "OTHER";
+
+  if (!thirdPartyBillerId) {
+    throw new ErrorClass(
+      "Third-party login response missing required field: billerId",
+      422
+    );
+  }
+
   let existingUser = await User.findOne({
-    where: { email: data.data.email }, // Keep original field reference
-    attributes: ["id"], // Only fetch needed fields for performance
+    where: { billerId: thirdPartyBillerId },
+    attributes: ["id"],
   });
 
   if (existingUser) {
-    const token = await authService.signToken(
+    const authToken = await authService.signToken(
       existingUser.id,
       Config.JWT_SECRET,
       "1d"
@@ -216,22 +241,22 @@ export const loginUser = TryCatchFunction(async (req, res) => {
       code: 200,
       message: "Login successful",
       data: {
-        authToken: token,
+        authToken: authToken,
       },
     });
   }
 
-  // Create new user (keeping original field mapping)
+  // Create new user (normalized mapping with safe fallbacks)
   const user = await User.create({
-    firstName: data.data.firstName,
-    lastName: data.data.lastName,
-    middleName: data.data.middleName,
-    dob: data.data.dob,
-    email: data.data.email, // Keep original - this was working
-    billerId: data.data.billerId,
-    nationality: data.data.nationality,
-    occupation: data.data.occupation,
-    gender: data.data.gender,
+    firstName: thirdPartyFirstName,
+    lastName: thirdPartyLastName,
+    middleName: thirdPartyMiddleName,
+    dob: thirdPartyDob,
+    email: thirdPartyEmail || String(thirdPartyBillerId),
+    billerId: thirdPartyBillerId,
+    nationality: thirdPartyNationality,
+    occupation: thirdPartyOccupation,
+    gender: thirdPartyGender,
   });
 
   if (!user) {
@@ -241,7 +266,11 @@ export const loginUser = TryCatchFunction(async (req, res) => {
     );
   }
 
-  const token = await authService.signToken(user.id, Config.JWT_SECRET, "1d");
+  const authToken = await authService.signToken(
+    user.id,
+    Config.JWT_SECRET,
+    "1d"
+  );
 
   return res.status(201).json({
     status: true,
@@ -249,7 +278,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
     message: "Account created and logged in successfully",
     data: {
       user,
-      authToken: token,
+      authToken: authToken,
     },
   });
 });
