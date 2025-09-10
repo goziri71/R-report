@@ -178,12 +178,12 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   const data = await validateCrosslinkToken({ token });
   console.log(data);
 
-  if (data.status === 401) {
-    throw new ErrorClass("invalid token", 401);
-  }
-
   if (!data) {
     throw new ErrorClass("Service temporarily down", 500);
+  }
+
+  if (data.code === 7010) {
+    throw new ErrorClass("Crosslink has been used", 401);
   }
 
   // Normalize and validate third-party response (Redbiller crosslink)
@@ -218,10 +218,7 @@ export const loginUser = TryCatchFunction(async (req, res) => {
     : "OTHER";
 
   if (!thirdPartyBillerId) {
-    throw new ErrorClass(
-      "Third-party login response missing required field: billerId",
-      422
-    );
+    throw new ErrorClass("user not found", 404);
   }
 
   let existingUser = await User.findOne({
