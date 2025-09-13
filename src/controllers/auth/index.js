@@ -1,144 +1,10 @@
-// import { ErrorClass } from "../../utils/errorClass/index.js";
-// import { TryCatchFunction } from "../../utils/tryCatch/index.js";
-// import { User } from "../../models/auth/index.js";
-// import { loginFromAlpha } from "../../core/apiCalls.js";
-// import { AuthService } from "../../service/auth.service.js";
-// import { Config } from "../../config/config.js";
-
-// const authService = new AuthService();
-
-// export const loginUser = TryCatchFunction(async (req, res) => {
-//   const { email_address, password } = req.body;
-//   const missingFields = [];
-//   if (!email_address) missingFields.push("email");
-//   if (!password) missingFields.push("password");
-//   if (missingFields.length > 0) {
-//     throw new ErrorClass(
-//       `Missing required fields: ${missingFields.join(", ")}`,
-//       422
-//     );
-//   }
-//   const data = await loginFromAlpha({ email_address, password });
-
-//   if (data.status === false) {
-//     throw new ErrorClass("invalid password", 401);
-//   }
-
-//   if (!data) throw new ErrorClass("Service temporarily down", 500);
-//   let existingUser = await User.findOne({
-//     where: { email: data.data.email },
-//   });
-
-//   if (existingUser) {
-//     const token = await authService.signToken(
-//       existingUser.id,
-//       Config.JWT_SECRET,
-//       "1d"
-//     );
-
-//     return res.status(200).json({
-//       status: true,
-//       code: 200,
-//       message: "Login successful",
-//       data: {
-//         authToken: token,
-//       },
-//     });
-//   }
-
-//   const user = await User.create({
-//     firstName: data.data.firstName,
-//     lastName: data.data.lastName,
-//     middleName: data.data.middleName,
-//     dob: data.data.dob,
-//     email: data.data.email,
-//     billerId: data.data.billerId,
-//     nationality: data.data.nationality,
-//     occupation: data.data.occupation,
-//     gender: data.data.gender,
-//   });
-
-//   if (!user) {
-//     throw new ErrorClass(
-//       "Something went wrong while trying to create your account, kindly try again",
-//       500
-//     );
-//   }
-//   const token = await authService.signToken(user.id, Config.JWT_SECRET, "1d");
-//   return res.status(201).json({
-//     status: true,
-//     code: 201,
-//     message: "Account created and logged in successfully",
-//     data: {
-//       user,
-//       authToken: token,
-//     },
-//   });
-// });
-
-// export const updateUser = TryCatchFunction(async (req, res) => {
-//   const { id } = req.params; // or req.user.id if using auth middleware
-//   const {
-//     firstName,
-//     lastName,
-//     middleName,
-//     dob,
-//     nationality,
-//     occupation,
-//     gender,
-//     isActive,
-//     role,
-//   } = req.body;
-
-//   const existingUser = await User.findByPk(id);
-//   if (!existingUser) {
-//     throw new ErrorClass("User not found", 404);
-//   }
-//   if (!existingUser.role === "admin") {
-//     throw new ErrorClass("Unathorized, User must be an admin");
-//   }
-
-//   const updateFields = {};
-//   if (firstName !== undefined) updateFields.firstName = firstName;
-//   if (lastName !== undefined) updateFields.lastName = lastName;
-//   if (middleName !== undefined) updateFields.middleName = middleName;
-//   if (dob !== undefined) updateFields.dob = dob;
-//   if (nationality !== undefined) updateFields.nationality = nationality;
-//   if (occupation !== undefined) updateFields.occupation = occupation;
-//   if (gender !== undefined) updateFields.gender = gender;
-//   if (isActive !== undefined) updateFields.isActive = isActive;
-//   if (role !== undefined) updateFields.role = role;
-
-//   if (Object.keys(updateFields).length === 0) {
-//     throw new ErrorClass("No valid fields provided for update", 400);
-//   }
-
-//   const [updatedRowsCount] = await User.update(updateFields, {
-//     where: { id },
-//   });
-
-//   if (updatedRowsCount === 0) {
-//     throw new ErrorClass("Failed to update user details", 500);
-//   }
-
-//   const updatedUser = await User.findByPk(id);
-
-//   return res.status(200).json({
-//     status: true,
-//     code: 200,
-//     message: "User details updated successfully",
-//     data: {
-//       user: updatedUser,
-//     },
-//   });
-// });
-
 import { ErrorClass } from "../../utils/errorClass/index.js";
 import { TryCatchFunction } from "../../utils/tryCatch/index.js";
 import { User } from "../../models/auth/index.js";
 import { validateCrosslinkToken } from "../../core/apiCalls.js";
 import { AuthService } from "../../service/auth.service.js";
 import { Config } from "../../config/config.js";
+import { Op } from "sequelize";
 
 const authService = new AuthService();
 
@@ -157,7 +23,6 @@ const UPDATABLE_FIELDS = [
 ];
 
 export const loginUser = TryCatchFunction(async (req, res) => {
-  console.log("loginUser");
   const { token } = req.body;
 
   console.log(token);
@@ -222,7 +87,9 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   }
 
   let existingUser = await User.findOne({
-    where: { billerId: thirdPartyBillerId },
+    where: {
+      [Op.or]: [{ billerId: thirdPartyBillerId }, { email: thirdPartyEmail }],
+    },
     attributes: ["id"],
   });
 
