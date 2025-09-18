@@ -25,8 +25,6 @@ const UPDATABLE_FIELDS = [
 export const loginUser = TryCatchFunction(async (req, res) => {
   const { token } = req.body;
 
-  console.log(token);
-
   // Fast validation
   const missingFields = REQUIRED_LOGIN_FIELDS.filter(
     (field) => !req.body[field]
@@ -41,7 +39,6 @@ export const loginUser = TryCatchFunction(async (req, res) => {
 
   // Validate crosslink token via third-party API (centralized helper)
   const data = await validateCrosslinkToken({ token });
-  console.log(data);
 
   if (!data) {
     throw new ErrorClass("Service temporarily down", 500);
@@ -54,44 +51,29 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   // Normalize and validate third-party response (Redbiller crosslink)
   const root = (data && data.data) || {};
   const profile = root.profile || {};
-  const bio = profile.bio || {};
-  const kyc = profile.kyc || {};
 
   const thirdPartyBillerId =
     profile.redbiller_id || root.redbiller_id || root.billerId;
   const thirdPartyEmail = profile.redbiller_id || root.email || null; // redbiller_id is email-like
-  const thirdPartyFirstName =
-    bio.first_name ||
-    kyc.first_name ||
-    root.firstName ||
-    profile.username ||
-    "User";
-  const thirdPartyLastName =
-    bio.last_name || kyc.last_name || root.lastName || "User";
-  const thirdPartyMiddleName =
-    bio.middle_name || kyc.middle_name || root.middleName || null;
-  const thirdPartyDob = bio.dob || kyc.dob || root.dob || null;
-  const thirdPartyNationality =
-    bio.nationality || kyc.nationality || root.nationality || "UNSPECIFIED";
-  const thirdPartyOccupation =
-    bio.occupation || kyc.occupation || root.occupation || "UNSPECIFIED";
-  const rawGender = (bio.gender || kyc.gender || root.gender || "OTHER")
-    .toString()
-    .toUpperCase();
-  const thirdPartyGender = ["MALE", "FEMALE", "OTHER"].includes(rawGender)
-    ? rawGender
-    : "OTHER";
 
-  if (!thirdPartyBillerId) {
-    throw new ErrorClass("user not found", 404);
+  // Build dynamic OR conditions only with present identifiers
+  const orConditions = [];
+  if (thirdPartyBillerId) orConditions.push({ billerId: thirdPartyBillerId });
+  if (thirdPartyEmail) orConditions.push({ email: thirdPartyEmail });
+
+  if (orConditions.length === 0) {
+    throw new ErrorClass("missing identifier", 422);
   }
 
   let existingUser = await User.findOne({
-    where: {
-      [Op.or]: [{ billerId: thirdPartyBillerId }, { email: thirdPartyEmail }],
-    },
+    where:
+      orConditions.length === 1 ? orConditions[0] : { [Op.or]: orConditions },
     attributes: ["id"],
   });
+
+  if (!existingUser) {
+    throw new ErrorClass("User not provisioned. Contact admin", 404);
+  }
 
   if (existingUser) {
     const authToken = await authService.signToken(
@@ -110,41 +92,41 @@ export const loginUser = TryCatchFunction(async (req, res) => {
     });
   }
 
-  // Create new user (normalized mapping with safe fallbacks)
-  const user = await User.create({
-    firstName: thirdPartyFirstName,
-    lastName: thirdPartyLastName,
-    middleName: thirdPartyMiddleName,
-    dob: thirdPartyDob,
-    email: thirdPartyEmail || String(thirdPartyBillerId),
-    billerId: thirdPartyBillerId,
-    nationality: thirdPartyNationality,
-    occupation: thirdPartyOccupation,
-    gender: thirdPartyGender,
-  });
+  // // Create new user (normalized mapping with safe fallbacks)
+  // const user = await User.create({
+  //   firstName: thirdPartyFirstName,
+  //   lastName: thirdPartyLastName,
+  //   middleName: thirdPartyMiddleName,
+  //   dob: thirdPartyDob,
+  //   email: thirdPartyEmail || String(thirdPartyBillerId),
+  //   billerId: thirdPartyBillerId,
+  //   nationality: thirdPartyNationality,
+  //   occupation: thirdPartyOccupation,
+  //   gender: thirdPartyGender,
+  // });
 
-  if (!user) {
-    throw new ErrorClass(
-      "Something went wrong while trying to create your account, kindly try again",
-      500
-    );
-  }
+  // if (!user) {
+  //   throw new ErrorClass(
+  //     "Something went wrong while trying to create your account, kindly try again",
+  //     500
+  //   );
+  // }
 
-  const authToken = await authService.signToken(
-    user.id,
-    Config.JWT_SECRET,
-    "1d"
-  );
+  // const authToken = await authService.signToken(
+  //   user.id,
+  //   Config.JWT_SECRET,
+  //   "1d"
+  // );
 
-  return res.status(201).json({
-    status: true,
-    code: 201,
-    message: "Account created and logged in successfully",
-    data: {
-      user,
-      authToken: authToken,
-    },
-  });
+  // return res.status(201).json({
+  //   status: true,
+  //   code: 201,
+  //   message: "Account created and logged in successfully",
+  //   data: {
+  //     user,
+  //     authToken: authToken,
+  //   },
+  // });
 });
 
 export const updateUser = TryCatchFunction(async (req, res) => {
