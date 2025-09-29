@@ -159,12 +159,10 @@ export const addNewUser = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("All fields are required", 400);
   }
   const userId = req.user;
-  console.log(userId);
   if (!userId) {
     throw new ErrorClass("User must be logged in to add a new user", 401);
   }
   const user = await User.findByPk(userId);
-  console.log(user);
   if (user.role !== "admin" && user.role !== "superadmin") {
     throw new ErrorClass(
       "User must be an admin or superadmin to add a new user",
