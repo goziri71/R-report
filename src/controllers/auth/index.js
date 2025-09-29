@@ -129,6 +129,83 @@ export const loginUser = TryCatchFunction(async (req, res) => {
   // });
 });
 
+export const addNewUser = TryCatchFunction(async (req, res) => {
+  const {
+    firstName,
+    lastName,
+    middleName,
+    dob,
+    nationality,
+    occupation,
+    gender,
+    isActive,
+    role,
+    email,
+    billerId,
+  } = req.body;
+  if (
+    !firstName ||
+    !lastName ||
+    !middleName ||
+    !dob ||
+    !nationality ||
+    !occupation ||
+    !gender ||
+    !isActive ||
+    !role ||
+    !email ||
+    !billerId
+  ) {
+    throw new ErrorClass("All fields are required", 400);
+  }
+  const userId = req.user;
+  console.log(userId);
+  if (!userId) {
+    throw new ErrorClass("User must be logged in to add a new user", 401);
+  }
+  const user = await User.findByPk(userId);
+  if (user.role !== "admin" && user.role !== "superadmin") {
+    throw new ErrorClass(
+      "User must be an admin or superadmin to add a new user",
+      403
+    );
+  }
+  const existingUser = await User.findOne({
+    where: {
+      email,
+      billerId,
+    },
+  });
+
+  if (existingUser) {
+    throw new ErrorClass("User already exists, cannot add duplicate user", 400);
+  }
+
+  const newUser = await User.create({
+    email,
+    billerId,
+    firstName,
+    lastName,
+    middleName,
+    lastName,
+    dob,
+    nationality,
+    occupation,
+    gender,
+    isActive,
+    role,
+  });
+
+  return res.status(201).json({
+    status: true,
+    code: 201,
+    message: "User added successfully",
+    data: {
+      user: newUser,
+    },
+  });
+});
+
 export const updateUser = TryCatchFunction(async (req, res) => {
   const userID = req.user;
   const { id } = req.params;

@@ -1,6 +1,6 @@
+import { Config } from "./src/config/config.js";
 import express from "express";
 import cors from "cors";
-import { Config } from "./src/config/config.js";
 import { initializeDatabases } from "./src/database/database.js";
 import { ErrorHandlerMiddleware } from "./src/middleware/errorHandler.js";
 import { rateLimiters } from "./src/middleware/rateLimiters.js";
@@ -34,11 +34,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://redbiller-work-neon.vercel.app",
-      "https://main.d5ival0pckjqv.amplifyapp.com",
-    ],
+    origin: ["http://localhost:3000", "https://r2.redbiller.com"],
     credentials: true,
   })
 );
