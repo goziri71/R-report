@@ -164,6 +164,7 @@ export const addNewUser = TryCatchFunction(async (req, res) => {
     throw new ErrorClass("User must be logged in to add a new user", 401);
   }
   const user = await User.findByPk(userId);
+  console.log(user);
   if (user.role !== "admin" && user.role !== "superadmin") {
     throw new ErrorClass(
       "User must be an admin or superadmin to add a new user",
@@ -172,8 +173,7 @@ export const addNewUser = TryCatchFunction(async (req, res) => {
   }
   const existingUser = await User.findOne({
     where: {
-      email,
-      billerId,
+      [Op.or]: [{ email }, { billerId }],
     },
   });
 
@@ -187,7 +187,6 @@ export const addNewUser = TryCatchFunction(async (req, res) => {
     firstName,
     lastName,
     middleName,
-    lastName,
     dob,
     nationality,
     occupation,
